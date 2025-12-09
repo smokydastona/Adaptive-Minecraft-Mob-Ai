@@ -67,14 +67,20 @@ repositories {
         url "https://maven.neoforged.net/releases/"
     }
     mavenCentral()
+    flatDir {
+        dirs 'libs'
+    }
 }
 
 dependencies {
     minecraft 'net.minecraftforge:forge:1.20.1-47.2.0'
     
-    // MCA Reborn is optional - mod works without it
-    // Users need to manually download MCA Reborn from CurseForge if they want villager dialogue features
-    // compileOnly fg.deobf("curse.maven:mca-reborn-263420:5093982")
+    // MCA Reborn from libs folder (optional)
+    // Download from: https://www.curseforge.com/minecraft/mc-mods/minecraft-comes-alive-reborn/files
+    // Place the JAR in libs/ folder for dialogue features
+    fileTree(dir: 'libs', include: ['*.jar']).each { File file ->
+        compileOnly fg.deobf(files(file))
+    }
     
     // Deep Java Library (DJL) for ML inference
     implementation 'ai.djl:api:0.25.0'

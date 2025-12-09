@@ -129,3 +129,13 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Gradle build
+.gradle/
+build/
+out/
+run/
+
+# Libs folder - optional JAR dependencies
+libs/*.jar
+!libs/README.md
