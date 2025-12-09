@@ -167,7 +167,7 @@ public class VillagerDialogueAI {
         
         // Use transformer dialogue if enabled and player provided message
         if (transformerEnabled && transformerDialogue != null && !playerMessage.isEmpty()) {
-            return generateWithTransformer(villagerId, playerMessage, personality, context);
+            return generateWithTransformer(villagerId.toString(), playerMessage, personality, context);
         } else if (aiEnabled) {
             return generateWithAI(personality, context);
         } else {
@@ -198,7 +198,7 @@ public class VillagerDialogueAI {
         String response = transformerDialogue.generateResponse(villagerId, playerMessage, transformerContext);
         
         // Update personality based on interaction
-        personality.recordInteraction(context.interactionType, playerMessage);
+        personality.recordInteraction(context, playerMessage);
         
         return response;
     }

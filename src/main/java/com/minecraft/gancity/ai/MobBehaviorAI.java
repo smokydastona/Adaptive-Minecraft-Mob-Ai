@@ -53,7 +53,7 @@ public class MobBehaviorAI {
     private void initializeAdvancedMLSystems() {
         try {
             // Core learning - 22 input features (state + visual + genome)
-            doubleDQN = new DoubleDQN(22, 10);  // 22 state features, 10 actions
+            doubleDQN = new DoubleDQN();  // Uses default 22 state features, 10 actions
             replayBuffer = new PrioritizedReplayBuffer(10000);
             
             // Multi-agent coordination
@@ -97,7 +97,7 @@ public class MobBehaviorAI {
         
         try {
             federatedLearning = new FederatedLearning(
-                modelPersistence != null ? modelPersistence.detectModelPath().resolve("federated") : java.nio.file.Paths.get("federated"),
+                modelPersistence != null ? modelPersistence.getModelPath().resolve("federated") : java.nio.file.Paths.get("federated"),
                 repoUrl != null ? repoUrl : ""
             );
             
@@ -625,7 +625,7 @@ public class MobBehaviorAI {
             geneticEvolution != null ? geneticEvolution.getGenerationNumber() : 0,
             curriculum != null ? curriculum.getCurrentStage() : "UNKNOWN",
             replayBuffer != null ? replayBuffer.size() : 0,
-            multiAgent != null ? multiAgent.getActiveTeamCount() : 0,
+            multiAgent != null ? multiAgent.getTeamCount() : 0,
             geneticEvolution != null ? geneticEvolution.getBestFitness() : 0.0f
         );
     }

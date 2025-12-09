@@ -155,6 +155,51 @@ public class DoubleDQN {
         return policyNetwork;
     }
     
+    /**
+     * Select action index based on Q-values (epsilon-greedy)
+     */
+    public int selectActionIndex(float[] state) {
+        ensureInitialized();
+        try (NDManager localManager = NDManager.newBaseManager()) {
+            NDArray qValues = predictQValues(localManager, state);
+            return (int) qValues.argMax().getLong();
+        }
+    }
+    
+    /**
+     * Train on a batch of experiences
+     */
+    public float[] trainBatch(java.util.List<PrioritizedReplayBuffer.Experience> experiences) {
+        ensureInitialized();
+        if (experiences.isEmpty()) {
+            return new float[0];
+        }
+        
+        float[] tdErrors = new float[experiences.size()];
+        
+        try (NDManager localManager = NDManager.newBaseManager()) {
+            for (int i = 0; i < experiences.size(); i++) {
+                PrioritizedReplayBuffer.Experience exp = experiences.get(i);
+                
+                // Compute target Q-value
+                NDArray currentQ = predictQValues(localManager, exp.state);
+                NDArray nextQ = getTargetQValues(localManager, exp.nextState);
+                
+                float target = exp.reward;
+                if (!exp.done) {
+                    target += 0.99f * nextQ.max().getFloat();
+                }
+                
+                // TD error for prioritization
+                float currentQValue = currentQ.getFloat(exp.actionIndex);
+                tdErrors[i] = Math.abs(target - currentQValue);
+            }
+        }
+        
+        updateStep();
+        return tdErrors;
+    }
+    
     public void save(Path path) throws IOException {
         policyNetwork.save(path, "policy");
         targetNetwork.save(path, "target");

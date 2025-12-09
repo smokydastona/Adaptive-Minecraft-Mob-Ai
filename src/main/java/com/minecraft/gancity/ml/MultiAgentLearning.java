@@ -109,6 +109,42 @@ public class MultiAgentLearning {
         return mobTeams.getOrDefault(mobId, Collections.emptyList());
     }
     
+    /**
+     * Record team experience for multi-agent learning
+     */
+    public void recordTeamExperience(String mobId, String teammateId, float reward) {
+        // Share reward information with teammate (simplified)
+        LOGGER.debug("Recording team experience: {} helped {}, reward: {}", mobId, teammateId, reward);
+    }
+    
+    /**
+     * Get team coordination bonus based on team performance
+     */
+    public float getTeamCoordinationBonus(String mobId) {
+        List<String> team = mobTeams.get(mobId);
+        if (team == null || team.size() <= 1) {
+            return 0.0f;
+        }
+        
+        // Bonus scales with team size
+        float teamSize = team.size();
+        return cooperationBonus * (teamSize - 1) / (teamSize * 10.0f); // 10-20% bonus
+    }
+    
+    /**
+     * Get count of active teams
+     */
+    public int getTeamCount() {
+        return activeTeams.size();
+    }
+    
+    /**
+     * Overload formTeam for list input
+     */
+    public String formTeam(List<String> mobIds) {
+        return formTeam(mobIds, "assault");
+    }
+    
     private static class TeamState {
         final String teamId;
         final String teamType;

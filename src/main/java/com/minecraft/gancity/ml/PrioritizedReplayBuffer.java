@@ -91,7 +91,7 @@ public class PrioritizedReplayBuffer {
                     sampledList.add(pExp);
                     
                     // Calculate importance sampling weight
-                    float probability = Math.pow(pExp.priority, alpha) / totalPriority;
+                    float probability = (float) (Math.pow(pExp.priority, alpha) / totalPriority);
                     float weight = (float) Math.pow(buffer.size() * probability, -beta);
                     weights.add(weight);
                     break;

@@ -92,6 +92,13 @@ public class ModelPersistence {
     }
     
     /**
+     * Get the model directory path (public accessor for federated learning)
+     */
+    public Path getModelPath() {
+        return modelDirectory;
+    }
+    
+    /**
      * Save DoubleDQN model
      */
     public void saveDoubleDQN(DoubleDQN dqn) {
