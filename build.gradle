@@ -87,20 +87,20 @@ dependencies {
         compileOnly fg.deobf(files(file))
     }
     
-    // Deep Java Library (DJL) for ML inference - OPTIONAL
-    // Added to runtimeOnly for dev environment testing
+    // Deep Java Library (DJL) for ML inference - bundled via jarJar
+    // These will be included in the mod JAR at runtime
+    jarJar(group: 'ai.djl', name: 'api', version: '[0.25.0,0.26.0)')
+    jarJar(group: 'ai.djl', name: 'basicdataset', version: '[0.25.0,0.26.0)')
+    jarJar(group: 'ai.djl.pytorch', name: 'pytorch-engine', version: '[0.25.0,0.26.0)')
+    jarJar(group: 'ai.djl.pytorch', name: 'pytorch-model-zoo', version: '[0.25.0,0.26.0)')
+    jarJar(group: 'ai.djl.huggingface', name: 'tokenizers', version: '[0.25.0,0.26.0)')
+    
+    // Also add to implementation for compile-time access
     implementation 'ai.djl:api:0.25.0'
     implementation 'ai.djl:basicdataset:0.25.0'
     implementation 'ai.djl.pytorch:pytorch-engine:0.25.0'
     implementation 'ai.djl.pytorch:pytorch-model-zoo:0.25.0'
     implementation 'ai.djl.huggingface:tokenizers:0.25.0'
-    
-    // Track ML libs for separate JAR generation (DJL only - stable on Maven Central)
-    mlLibs 'ai.djl:api:0.25.0'
-    mlLibs 'ai.djl:basicdataset:0.25.0'
-    mlLibs 'ai.djl.pytorch:pytorch-engine:0.25.0'
-    mlLibs 'ai.djl.pytorch:pytorch-model-zoo:0.25.0'
-    mlLibs 'ai.djl.huggingface:tokenizers:0.25.0'
 }
 
 tasks.named('jar', Jar).configure {
@@ -116,6 +116,7 @@ tasks.named('jar', Jar).configure {
         ])
     }
 
+    jarJar.enable()
     finalizedBy 'reobfJar'
 }
 
