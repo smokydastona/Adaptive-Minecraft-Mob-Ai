@@ -95,22 +95,12 @@ dependencies {
     compileOnly 'ai.djl.pytorch:pytorch-model-zoo:0.25.0'
     compileOnly 'ai.djl.huggingface:tokenizers:0.25.0'
     
-    // XGBoost for gradient boosting (lightweight alternative) - OPTIONAL  
-    // Using xgboost4j base package (without Spark dependency)
-    compileOnly 'ml.dmlc:xgboost4j:2.1.3'
-    
-    // Smile - Statistical Machine Intelligence & Learning Engine - OPTIONAL
-    // Java equivalent to scikit-learn (Random Forest, Decision Trees, k-NN, etc.)
-    compileOnly 'com.github.haifengl:smile-core:3.1.1'
-    
-    // Track ML libs for separate JAR generation
+    // Track ML libs for separate JAR generation (DJL only - stable on Maven Central)
     mlLibs 'ai.djl:api:0.25.0'
     mlLibs 'ai.djl:basicdataset:0.25.0'
     mlLibs 'ai.djl.pytorch:pytorch-engine:0.25.0'
     mlLibs 'ai.djl.pytorch:pytorch-model-zoo:0.25.0'
     mlLibs 'ai.djl.huggingface:tokenizers:0.25.0'
-    mlLibs 'ml.dmlc:xgboost4j:2.1.3'
-    mlLibs 'com.github.haifengl:smile-core:3.1.1'
 }
 
 tasks.named('jar', Jar).configure {
