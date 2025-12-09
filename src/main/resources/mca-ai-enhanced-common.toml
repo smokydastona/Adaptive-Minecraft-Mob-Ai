@@ -1,0 +1,55 @@
+[general]
+	#Enable AI-enhanced mob behavior
+	enableMobAI = true
+	
+	#Enable AI-powered villager dialogue (requires MCA Reborn)
+	enableVillagerDialogue = true
+	
+	#Allow mobs to learn from combat outcomes
+	enableLearning = true
+	
+	#Mob AI difficulty multiplier (1.0 = normal, 2.0 = hard)
+	#Range: 0.5 ~ 3.0
+	aiDifficulty = 1.0
+
+[mob_behaviors]
+	#Enable adaptive behavior for Zombies
+	enableZombieAI = true
+	
+	#Enable adaptive behavior for Skeletons
+	enableSkeletonAI = true
+	
+	#Enable adaptive behavior for Creepers
+	enableCreeperAI = true
+	
+	#Enable adaptive behavior for Spiders
+	enableSpiderAI = true
+	
+	#Ticks between AI decision updates
+	#Range: 10 ~ 100
+	aiUpdateInterval = 20
+
+[villager_dialogue]
+	#Number of dialogue variations to generate
+	#Range: 1 ~ 10
+	dialogueVariations = 3
+	
+	#Enable personality evolution over time
+	enablePersonalityLearning = true
+	
+	#Enable mood tracking for villagers
+	enableMoodSystem = true
+	
+	#Dialogue randomness (0.0 = predictable, 1.0 = very random)
+	#Range: 0.0 ~ 1.0
+	dialogueRandomness = 0.3
+
+[advanced]
+	#Path to custom AI models folder
+	modelsPath = "models"
+	
+	#Log AI decisions for debugging
+	debugAI = false
+	
+	#Enable experimental features
+	experimentalFeatures = false

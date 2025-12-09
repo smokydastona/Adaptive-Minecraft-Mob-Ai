@@ -1,0 +1,125 @@
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+}
+
+version = '1.0.0'
+group = 'com.minecraft.gancity'
+
+base {
+    archivesName = 'mca-ai-enhanced'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+minecraft {
+    mappings channel: 'official', version: '1.20.1'
+    
+    runs {
+        client {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            property 'forge.enabledGameTestNamespaces', 'gancity'
+
+            mods {
+                gancity {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        server {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            property 'forge.enabledGameTestNamespaces', 'gancity'
+
+            mods {
+                gancity {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        data {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+
+            args '--mod', 'gancity', '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+
+            mods {
+                gancity {
+                    source sourceSets.main
+                }
+            }
+        }
+    }
+}
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+repositories {
+    maven {
+        url "https://maven.neoforged.net/releases/"
+    }
+    maven {
+        url "https://maven.lukeonuke.com/repository/mca"
+    }
+    maven {
+        url "https://cursemaven.com"
+    }
+}
+
+dependencies {
+    minecraft 'net.minecraftforge:forge:1.20.1-47.2.0'
+    
+    // MCA Reborn dependency
+    compileOnly fg.deobf("curse.maven:mca-reborn-263420:5093982")
+    runtimeOnly fg.deobf("curse.maven:mca-reborn-263420:5093982")
+    
+    // Deep Java Library (DJL) for ML inference
+    implementation 'ai.djl:api:0.25.0'
+    implementation 'ai.djl:basicdataset:0.25.0'
+    implementation 'ai.djl.pytorch:pytorch-engine:0.25.0'
+    implementation 'ai.djl.pytorch:pytorch-model-zoo:0.25.0'
+    
+    // For NLP/dialogue generation
+    implementation 'ai.djl.huggingface:tokenizers:0.25.0'
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes([
+                'Specification-Title'     : 'Minecraft GAN City Generator',
+                'Specification-Vendor'    : 'GAN City Team',
+                'Specification-Version'   : '1',
+                'Implementation-Title'    : project.name,
+                'Implementation-Version'  : project.jar.archiveVersion,
+                'Implementation-Vendor'   : 'GAN City Team',
+                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+
+    finalizedBy 'reobfJar'
+}
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            artifact jar
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/mcmodsrepo"
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
