@@ -30,6 +30,9 @@ public class MobBehaviorAI {
     private TacticKnowledgeBase tacticKnowledgeBase;
     private ModelPersistence modelPersistence;
     
+    // XGBoost for lightweight gradient boosting
+    private XGBoostTacticPredictor xgboost;
+    
     // Federated learning (optional)
     private FederatedLearning federatedLearning;
     
@@ -75,11 +78,17 @@ public class MobBehaviorAI {
             tacticKnowledgeBase = new TacticKnowledgeBase();
             modelPersistence = new ModelPersistence();
             
+            // XGBoost for gradient boosting (lightweight, explainable)
+            xgboost = new XGBoostTacticPredictor();
+            
             // Load saved models if available
             modelPersistence.loadAll(doubleDQN, replayBuffer, tacticKnowledgeBase);
             
             mlEnabled = true;
-            LOGGER.info("Advanced ML systems initialized - DQN, Replay, Multi-Agent, Curriculum, Vision, Genetic, Tasks, Reflexes, Goals, Knowledge, Persistence");
+            String mlSystems = xgboost.isAvailable() ? 
+                "DQN, Replay, Multi-Agent, Curriculum, Vision, Genetic, Tasks, Reflexes, Goals, Knowledge, XGBoost, Persistence" :
+                "DQN, Replay, Multi-Agent, Curriculum, Vision, Genetic, Tasks, Reflexes, Goals, Knowledge, Persistence";
+            LOGGER.info("Advanced ML systems initialized - {}", mlSystems);
         } catch (Exception e) {
             LOGGER.warn("Failed to initialize ML systems, using rule-based fallback: {}", e.getMessage());
             mlEnabled = false;
@@ -249,14 +258,22 @@ public class MobBehaviorAI {
         // Combine all feature sources
         float[] combinedFeatures = combineFeatures(state, visual, genome);
         
-        // Use Double DQN to select action
-        int actionIndex = doubleDQN.selectActionIndex(combinedFeatures);
+        // Try XGBoost first (fast, explainable) if available
+        int actionIndex = -1;
+        if (xgboost != null && xgboost.isAvailable()) {
+            actionIndex = xgboost.predictTactic(combinedFeatures, validActions.size());
+        }
+        
+        // Fall back to Double DQN if XGBoost not available or returns -1
+        if (actionIndex < 0 && doubleDQN != null) {
+            actionIndex = doubleDQN.selectActionIndex(combinedFeatures);
+        }
         
         // Map index to valid action
         if (actionIndex >= validActions.size()) {
             actionIndex = actionIndex % validActions.size();
         }
-        String selectedAction = validActions.get(actionIndex);
+        String selectedAction = validActions.get(Math.max(0, actionIndex));
         
         // Apply genetic modifiers
         if (genome.actionWeights.containsKey(selectedAction)) {
@@ -499,6 +516,12 @@ public class MobBehaviorAI {
             
             // Add to prioritized replay buffer
             replayBuffer.add(initialFeatures, actionIndex, reward, finalFeatures, episodeDone);
+            
+            // Train XGBoost if available (fast, incremental)
+            if (xgboost != null && xgboost.isAvailable()) {
+                String mobType = "unknown"; // Extract from mobId or state if needed
+                xgboost.recordOutcome(mobType, initialFeatures, actionIndex, reward > 0);
+            }
             
             // Sample and train Double DQN with prioritized experiences
             if (replayBuffer.size() >= 32) {

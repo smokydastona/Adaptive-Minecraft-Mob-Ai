@@ -95,12 +95,16 @@ dependencies {
     compileOnly 'ai.djl.pytorch:pytorch-model-zoo:0.25.0'
     compileOnly 'ai.djl.huggingface:tokenizers:0.25.0'
     
+    // XGBoost for gradient boosting (lightweight alternative) - OPTIONAL
+    compileOnly 'ml.dmlc:xgboost4j:2.0.3'
+    
     // Track ML libs for separate JAR generation
     mlLibs 'ai.djl:api:0.25.0'
     mlLibs 'ai.djl:basicdataset:0.25.0'
     mlLibs 'ai.djl.pytorch:pytorch-engine:0.25.0'
     mlLibs 'ai.djl.pytorch:pytorch-model-zoo:0.25.0'
     mlLibs 'ai.djl.huggingface:tokenizers:0.25.0'
+    mlLibs 'ml.dmlc:xgboost4j:2.0.3'
 }
 
 tasks.named('jar', Jar).configure {
