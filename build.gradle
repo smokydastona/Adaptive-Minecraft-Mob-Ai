@@ -119,12 +119,17 @@ tasks.named('jar', Jar).configure {
     finalizedBy 'reobfJar'
 }
 
-// Create optional ML libraries JAR
+// Create optional ML libraries JAR - must be a proper mod JAR with mods.toml
 task mlLibsJar(type: Jar) {
     archiveClassifier = 'libs'
     
     from {
         configurations.mlLibs.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    
+    // Add mods.toml so Forge recognizes it as a mod
+    from('src/main/resources-libs') {
+        include 'META-INF/mods.toml'
     }
     
     exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
@@ -137,8 +142,7 @@ task mlLibsJar(type: Jar) {
                 'Specification-Version'   : '1',
                 'Implementation-Title'    : 'ai-overhaul-experiment-libs',
                 'Implementation-Version'  : version,
-                'Implementation-Vendor'   : 'GAN City Team',
-                'FMLModType'              : 'LIBRARY'
+                'Implementation-Vendor'   : 'GAN City Team'
         ])
     }
 }

@@ -1,0 +1,35 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[mods]]
+modId="gancitylibs"
+version="${file.jarVersion}"
+displayName="MCA AI Enhanced - ML Libraries"
+description='''
+Optional machine learning libraries for MCA AI Enhanced.
+Provides DJL (Deep Java Library) and PyTorch for neural network learning.
+This JAR only contains libraries and has no game logic.
+'''
+authors="GAN City Team"
+
+[[dependencies.gancitylibs]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.gancitylibs]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.21)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.gancitylibs]]
+    modId="gancity"
+    mandatory=true
+    versionRange="[1.0,)"
+    ordering="AFTER"
+    side="BOTH"
