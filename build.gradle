@@ -72,6 +72,11 @@ repositories {
     }
 }
 
+// Configuration for optional ML libraries JAR
+configurations {
+    mlLibs
+}
+
 dependencies {
     minecraft 'net.minecraftforge:forge:1.20.1-47.2.0'
     
@@ -82,13 +87,20 @@ dependencies {
         compileOnly fg.deobf(files(file))
     }
     
-    // Deep Java Library (DJL) for ML inference - OPTIONAL (compileOnly)
-    // If not present, mod uses rule-based AI instead
+    // Deep Java Library (DJL) for ML inference - OPTIONAL
+    // Compile-time only, can be provided by optional libs JAR at runtime
     compileOnly 'ai.djl:api:0.25.0'
     compileOnly 'ai.djl:basicdataset:0.25.0'
     compileOnly 'ai.djl.pytorch:pytorch-engine:0.25.0'
     compileOnly 'ai.djl.pytorch:pytorch-model-zoo:0.25.0'
     compileOnly 'ai.djl.huggingface:tokenizers:0.25.0'
+    
+    // Track ML libs for separate JAR generation
+    mlLibs 'ai.djl:api:0.25.0'
+    mlLibs 'ai.djl:basicdataset:0.25.0'
+    mlLibs 'ai.djl.pytorch:pytorch-engine:0.25.0'
+    mlLibs 'ai.djl.pytorch:pytorch-model-zoo:0.25.0'
+    mlLibs 'ai.djl.huggingface:tokenizers:0.25.0'
 }
 
 tasks.named('jar', Jar).configure {
@@ -106,6 +118,33 @@ tasks.named('jar', Jar).configure {
 
     finalizedBy 'reobfJar'
 }
+
+// Create optional ML libraries JAR
+task mlLibsJar(type: Jar) {
+    archiveClassifier = 'libs'
+    
+    from {
+        configurations.mlLibs.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    
+    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    
+    manifest {
+        attributes([
+                'Specification-Title'     : 'MCA AI Enhanced - ML Libraries',
+                'Specification-Vendor'    : 'GAN City Team',
+                'Specification-Version'   : '1',
+                'Implementation-Title'    : 'ai-overhaul-experiment-libs',
+                'Implementation-Version'  : version,
+                'Implementation-Vendor'   : 'GAN City Team',
+                'FMLModType'              : 'LIBRARY'
+        ])
+    }
+}
+
+// Build ML libs JAR as part of standard build
+build.dependsOn mlLibsJar
 
 publishing {
     publications {

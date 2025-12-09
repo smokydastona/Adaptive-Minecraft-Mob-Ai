@@ -51,11 +51,18 @@ jobs:
     - name: List build artifacts
       run: ls -la build/libs/
     
-    - name: Upload build artifacts
+    - name: Upload main mod JAR
       uses: actions/upload-artifact@v4
       with:
-        name: mca-ai-enhanced-${{ steps.version.outputs.VERSION }}
-        path: build/libs/*.jar
+        name: ai-overhaul-experiment-${{ steps.version.outputs.VERSION }}
+        path: build/libs/ai-overhaul-experiment-${{ steps.version.outputs.VERSION }}.jar
+        retention-days: 90
+    
+    - name: Upload optional ML libraries JAR
+      uses: actions/upload-artifact@v4
+      with:
+        name: ai-overhaul-experiment-libs-${{ steps.version.outputs.VERSION }}
+        path: build/libs/ai-overhaul-experiment-${{ steps.version.outputs.VERSION }}-libs.jar
         retention-days: 90
     
     - name: Create Release
