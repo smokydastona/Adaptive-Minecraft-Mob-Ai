@@ -59,10 +59,7 @@
 	enableFederatedLearning = true
 	
 	#Cloudflare Worker API endpoint (zero-config, works out-of-the-box)
-	#Set this to your deployed worker URL after following cloudflare-worker/DEPLOYMENT.md
-	#Example: "https://mca-ai-tactics-api.YOUR-SUBDOMAIN.workers.dev"
-	#Leave empty to disable automatic sync
-	cloudApiEndpoint = ""
+	cloudApiEndpoint = "https://mca-ai-tactics-api.mc-ai-datcol.workers.dev"
 	
 	#LEGACY: Git repository URL (deprecated, use cloudApiEndpoint instead)
 	#SSH: git@github.com:smokydastona/Minecraft-machine-learned-collected.git
