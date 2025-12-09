@@ -33,6 +33,9 @@ public class MobBehaviorAI {
     // XGBoost for lightweight gradient boosting
     private XGBoostTacticPredictor xgboost;
     
+    // Smile Random Forest for ensemble learning
+    private SmileRandomForest randomForest;
+    
     // Federated learning (optional)
     private FederatedLearning federatedLearning;
     
@@ -81,18 +84,46 @@ public class MobBehaviorAI {
             // XGBoost for gradient boosting (lightweight, explainable)
             xgboost = new XGBoostTacticPredictor();
             
+            // Smile Random Forest (ensemble, robust)
+            randomForest = new SmileRandomForest();
+            
             // Load saved models if available
             modelPersistence.loadAll(doubleDQN, replayBuffer, tacticKnowledgeBase);
             
             mlEnabled = true;
-            String mlSystems = xgboost.isAvailable() ? 
-                "DQN, Replay, Multi-Agent, Curriculum, Vision, Genetic, Tasks, Reflexes, Goals, Knowledge, XGBoost, Persistence" :
-                "DQN, Replay, Multi-Agent, Curriculum, Vision, Genetic, Tasks, Reflexes, Goals, Knowledge, Persistence";
+            String mlSystems = buildMLSystemsString();
             LOGGER.info("Advanced ML systems initialized - {}", mlSystems);
         } catch (Exception e) {
             LOGGER.warn("Failed to initialize ML systems, using rule-based fallback: {}", e.getMessage());
             mlEnabled = false;
         }
+    }
+    
+    /**
+     * Build ML systems status string
+     */
+    private String buildMLSystemsString() {
+        List<String> systems = new ArrayList<>();
+        systems.add("DQN");
+        systems.add("Replay");
+        systems.add("Multi-Agent");
+        systems.add("Curriculum");
+        systems.add("Vision");
+        systems.add("Genetic");
+        systems.add("Tasks");
+        systems.add("Reflexes");
+        systems.add("Goals");
+        systems.add("Knowledge");
+        
+        if (xgboost != null && xgboost.isAvailable()) {
+            systems.add("XGBoost");
+        }
+        if (randomForest != null && randomForest.isAvailable()) {
+            systems.add("RandomForest");
+        }
+        
+        systems.add("Persistence");
+        return String.join(", ", systems);
     }
     
     /**
@@ -258,13 +289,29 @@ public class MobBehaviorAI {
         // Combine all feature sources
         float[] combinedFeatures = combineFeatures(state, visual, genome);
         
-        // Try XGBoost first (fast, explainable) if available
+        // Try ensemble methods first (most robust)
         int actionIndex = -1;
-        if (xgboost != null && xgboost.isAvailable()) {
+        
+        // 1. Random Forest (ensemble learning, handles non-linear patterns well)
+        if (randomForest != null && randomForest.isAvailable()) {
+            double[] features = new double[combinedFeatures.length];
+            for (int i = 0; i < combinedFeatures.length; i++) {
+                features[i] = combinedFeatures[i];
+            }
+            actionIndex = randomForest.predictTactic(features);
+            
+            // Record this tactic for future training
+            if (actionIndex >= 0 && actionIndex < validActions.size()) {
+                randomForest.recordTactic("unknown", features, actionIndex);
+            }
+        }
+        
+        // 2. XGBoost (fast gradient boosting) if Random Forest unavailable
+        if (actionIndex < 0 && xgboost != null && xgboost.isAvailable()) {
             actionIndex = xgboost.predictTactic(combinedFeatures, validActions.size());
         }
         
-        // Fall back to Double DQN if XGBoost not available or returns -1
+        // 3. Fall back to Double DQN if neither available
         if (actionIndex < 0 && doubleDQN != null) {
             actionIndex = doubleDQN.selectActionIndex(combinedFeatures);
         }
