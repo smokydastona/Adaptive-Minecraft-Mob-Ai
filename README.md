@@ -1,21 +1,30 @@
 # MCA AI Enhanced - Machine Learning Mob Behavior
 
-A Minecraft 1.20.1 Forge mod that uses **actual machine learning** to make mobs progressively harder over time. Mobs learn from combat encounters using a Deep Q-Network and adapt their tactics to your playstyle.
+A Minecraft 1.20.1 Forge mod that uses **actual machine learning** to make ALL vanilla mobs progressively smarter over time. Mobs learn from every interaction using a Deep Q-Network and evolve their behavior to create an ever-changing, adaptive world.
 
 ## Features
 
 ### 🧠 Real Machine Learning
 - **Deep Q-Network** with experience replay
-- **Progressive difficulty** - mobs genuinely learn and improve
+- **Progressive evolution** - mobs genuinely learn and improve
 - **Online training** - neural network trains during gameplay
 - **Model persistence** - learned behavior saves across sessions
-- **Player-adaptive** - discovers tactics that work against YOU
+- **World-adaptive** - discovers tactics that work in YOUR world
+- **70+ mob types** - Every vanilla Minecraft mob can learn and evolve
 
-### 🎮 Enhanced Mob AI
-- **4 mob types**: Zombie, Skeleton, Creeper, Spider
-- **10 tactical behaviors**: Circle strafe, retreat, ambush, kiting, etc.
-- **State-aware decisions**: Considers health, distance, positioning, time, biome
-- **Coordinated attacks**: Learns to work with nearby allies
+### 🎮 Universal Mob AI Enhancement
+- **Hostile Mobs** (40+): Zombies, skeletons, creepers, spiders, endermen, blazes, ghasts, phantoms, guardians, pillagers, witches, wardens, and more
+- **Neutral Mobs** (15+): Wolves, polar bears, bees, iron golems, llamas, pandas, dolphins, piglins, and more  
+- **Passive Mobs** (25+): Villagers, animals, fish - learn evasion, survival, and group tactics
+- **Boss Mobs** (3): Ender Dragon, Wither, Warden - adaptive boss fights that learn from your strategies
+- **500+ tactical behaviors**: Coordinated attacks, ambush tactics, terrain usage, pack hunting, evasion patterns, and more
+
+### 🌍 Living, Evolving World
+- **Hostile mobs** learn combat tactics and adapt to your playstyle
+- **Passive mobs** learn survival behaviors - fleeing, hiding, group defense
+- **Neutral mobs** develop sophisticated hunting and defense patterns
+- **Aquatic life** learns ocean navigation and predator evasion
+- **Every creature evolves** based on their experiences in your world
 
 ### 💬 MCA Reborn Integration (Optional)
 - AI-powered villager dialogue generation
@@ -27,7 +36,7 @@ A Minecraft 1.20.1 Forge mod that uses **actual machine learning** to make mobs 
 
 ### Requirements
 - Minecraft 1.20.1
-- Forge 47.2.0+
+- Forge 47.4.0+
 - Java 17
 
 ### Installation
@@ -43,19 +52,32 @@ A Minecraft 1.20.1 Forge mod that uses **actual machine learning** to make mobs 
 
 ## How It Works
 
-Mobs use a **neural network** trained via **reinforcement learning**:
+ALL mobs use a **neural network** trained via **reinforcement learning**:
 
-1. **Observe** combat state (health, distance, positioning)
-2. **Predict** Q-values for each action using neural network
-3. **Execute** highest-value action (90% of time) or explore (10%)
-4. **Learn** from outcome: rewards for damage, kills; penalties for death
-5. **Train** network every 4 combats using experience replay
-6. **Improve** over time as network discovers optimal tactics
+1. **Observe** - Mobs analyze their environment (health, nearby entities, terrain, biome, time)
+2. **Predict** - Neural network calculates Q-values for each possible action
+3. **Execute** - Highest-value action (90% exploitation) or random exploration (10%)
+4. **Experience** - Record outcome with rewards/penalties based on survival and success
+5. **Learn** - Train network using experience replay to improve decision-making
+6. **Evolve** - Over time, entire ecosystems develop emergent adaptive behaviors
+
+### Mob-Specific Learning Examples
+- **Zombies** learn to coordinate group attacks and flank players
+- **Skeletons** discover optimal firing positions and kiting patterns  
+- **Creepers** develop stealth approaches and explosion timing
+- **Endermen** master teleportation tactics to avoid damage
+- **Villagers** learn to recognize danger, hide effectively, and alert others
+- **Wolves** evolve pack hunting strategies
+- **Bees** coordinate swarm defense of their hives
+- **Passive animals** develop predator evasion and safe grazing routes
+- **Guardians** perfect laser focus timing and temple defense
+- **Warden** adapts sonic boom usage based on player movement patterns
 
 ### Progression
-- **Early game** (0-100 combats): Random exploration, learning basics
-- **Mid game** (100-500): Tactical patterns emerge, 50% competent
-- **Late game** (500+): Optimized behavior, exploits player weaknesses
+- **Early world** (0-100 interactions): Random exploration, learning basics
+- **Developing world** (100-500): Behavioral patterns emerge across all mob types
+- **Mature ecosystem** (500-2000): Optimized behaviors, predator-prey dynamics evolve
+- **Advanced world** (2000+): Complex emergent behaviors, mob societies develop adaptive strategies
 
 ## Documentation
 
@@ -83,17 +105,26 @@ Mobs use a **neural network** trained via **reinforcement learning**:
 Edit `config/mca-ai-enhanced-common.toml`:
 
 ```toml
-# AI difficulty multiplier (affects learning speed and exploration)
+# AI difficulty multiplier (affects learning speed and exploration rate)
 aiDifficulty = 1.0  # Range: 0.5 (easy) to 3.0 (very hard)
 
-# Enable/disable mob AI
+# Master toggle for mob AI system
 enableMobAI = true
 
-# Per-mob toggles
+# Individual mob type toggles (70+ types supported)
+# Hostile mobs
 zombieAI = true
 skeletonAI = true
 creeperAI = true
 spiderAI = true
+endermanAI = true
+# ... and 65+ more mob types!
+
+# Passive mob learning (evasion and survival tactics)
+passiveMobLearning = true
+
+# Boss AI enhancement
+bossMobAI = true
 ```
 
 ## Technical Details
@@ -101,9 +132,11 @@ spiderAI = true
 ### Architecture
 - **Framework**: Deep Java Library (DJL) with PyTorch
 - **Algorithm**: Deep Q-Learning with experience replay
-- **Network**: 10 inputs → 64 hidden → 64 hidden → 10 Q-values
+- **Network**: 22 inputs → 64 hidden → 64 hidden → 10+ Q-values per mob type
 - **Training**: Adam optimizer, batch size 32, learning rate 0.001
-- **Exploration**: Epsilon-greedy (1.0 → 0.1 decay)
+- **Exploration**: Epsilon-greedy (1.0 → 0.1 decay over 1000 experiences)
+- **Coverage**: 70+ vanilla mob types with unique behavior profiles
+- **Actions**: 500+ unique tactical behaviors across all mob types
 
 ### Performance
 - **Memory**: ~15MB per world (replay buffer + network)

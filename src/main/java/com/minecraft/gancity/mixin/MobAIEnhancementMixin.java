@@ -23,14 +23,20 @@ public abstract class MobAIEnhancementMixin {
     
     /**
      * Inject AI-enhanced behavior when mob registers goals
+     * Now applies to ALL mobs, not just monsters - passive mobs learn evasion
      */
     @Inject(method = "registerGoals", at = @At("TAIL"))
     private void onRegisterGoals(CallbackInfo ci) {
         Mob mob = (Mob)(Object)this;
         
-        // Add AI-enhanced combat goal
+        // Add AI-enhanced combat/survival goal to ALL mobs
+        // Hostile mobs learn combat tactics, passive mobs learn evasion and survival
         if (mob instanceof Monster) {
+            // Hostile mobs get aggressive AI
             mob.goalSelector.addGoal(2, new AIEnhancedMeleeGoal(mob, 1.0, true));
+        } else {
+            // Neutral and passive mobs get survival/evasion AI (lower priority to not override core behavior)
+            mob.goalSelector.addGoal(5, new AIEnhancedMeleeGoal(mob, 1.2, false));
         }
     }
     
