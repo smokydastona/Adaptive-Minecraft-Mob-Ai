@@ -141,7 +141,7 @@ public class ModelPersistence {
             
             LOGGER.info("Loaded DoubleDQN model from {}", modelDirectory);
             
-        } catch (IOException e) {
+        } catch (IOException | ai.djl.MalformedModelException e) {
             LOGGER.error("Failed to load DoubleDQN model", e);
         }
     }
