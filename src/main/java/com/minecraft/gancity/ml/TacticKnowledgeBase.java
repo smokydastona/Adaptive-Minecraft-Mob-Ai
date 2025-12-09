@@ -1,5 +1,6 @@
 package com.minecraft.gancity.ml;
 
+import com.minecraft.gancity.ai.FederatedLearning;
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
@@ -15,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * - Player behavior patterns
  * - Counter-tactics database
  * - Learning from past encounters
+ * - Federated learning integration for global knowledge sharing
  */
 public class TacticKnowledgeBase {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -24,6 +26,9 @@ public class TacticKnowledgeBase {
     private final Map<String, PlayerBehaviorProfile> playerProfiles = new ConcurrentHashMap<>();
     private final Map<String, Float> tacticSuccessRates = new ConcurrentHashMap<>();
     
+    // Federated learning (optional)
+    private FederatedLearning federatedLearning;
+    
     // Configuration
     private static final int MAX_ENTRIES_PER_CATEGORY = 100;
     private static final float MIN_SUCCESS_RATE = 0.3f;
@@ -31,6 +36,14 @@ public class TacticKnowledgeBase {
     
     public TacticKnowledgeBase() {
         initializeKnowledgeBase();
+    }
+    
+    /**
+     * Set federated learning instance for global knowledge sharing
+     */
+    public void setFederatedLearning(FederatedLearning federatedLearning) {
+        this.federatedLearning = federatedLearning;
+        LOGGER.info("Federated learning enabled for knowledge base");
     }
     
     /**
@@ -174,13 +187,30 @@ public class TacticKnowledgeBase {
         tacticSuccessRates.put(key, newRate);
         
         // Update tactic in knowledge base
-        for (List<TacticEntry> entries : tacticsByCategory.values()) {
-            for (TacticEntry entry : entries) {
+        String category = null;
+        Map<String, String> conditions = new HashMap<>();
+        
+        for (Map.Entry<String, List<TacticEntry>> catEntry : tacticsByCategory.entrySet()) {
+            for (TacticEntry entry : catEntry.getValue()) {
                 if (entry.name.equalsIgnoreCase(tacticName)) {
                     entry.updateSuccessRate(newRate);
                     entry.timesUsed++;
+                    category = catEntry.getKey();
+                    
+                    // Extract conditions for federated learning
+                    for (String cond : entry.conditions) {
+                        String[] parts = cond.split(" ");
+                        if (parts.length >= 2) {
+                            conditions.put(parts[0], parts.length > 2 ? parts[2] : parts[1]);
+                        }
+                    }
                 }
             }
+        }
+        
+        // Sync to federated learning if enabled
+        if (federatedLearning != null && category != null) {
+            federatedLearning.recordLocalOutcome(key, category, success, conditions);
         }
         
         LOGGER.debug("Tactic '{}' outcome: {} (new rate: {:.2f})", 

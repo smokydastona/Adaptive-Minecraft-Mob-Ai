@@ -67,6 +67,9 @@ public class GANCityMod {
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
         LOGGER.info("MCA AI Enhanced - Server starting with AI enhancements");
+        
+        // Load config and initialize federated learning if enabled
+        initializeFederatedLearning();
     }
     
     @SubscribeEvent
@@ -109,5 +112,69 @@ public class GANCityMod {
 
     public static ResourceLocation id(String path) {
         return new ResourceLocation(MODID, path);
+    }
+    
+    /**
+     * Initialize federated learning from config
+     */
+    private void initializeFederatedLearning() {
+        try {
+            // Read config (simple properties-based for now)
+            java.nio.file.Path configPath = java.nio.file.Paths.get("config", "mca-ai-enhanced-common.toml");
+            
+            if (!java.nio.file.Files.exists(configPath)) {
+                LOGGER.info("Config file not found, federated learning disabled");
+                return;
+            }
+            
+            // Parse TOML config
+            java.util.List<String> lines = java.nio.file.Files.readAllLines(configPath);
+            boolean federatedEnabled = false;
+            String repoUrl = "";
+            String apiEndpoint = "";
+            String apiKey = "";
+            
+            for (String line : lines) {
+                line = line.trim();
+                if (line.contains("enableFederatedLearning") && line.contains("true")) {
+                    federatedEnabled = true;
+                } else if (line.contains("federatedRepoUrl")) {
+                    String[] parts = line.split("=");
+                    if (parts.length > 1) {
+                        repoUrl = parts[1].trim().replace("\"", "").replace("'", "");
+                    }
+                } else if (line.contains("cloudApiEndpoint")) {
+                    String[] parts = line.split("=");
+                    if (parts.length > 1) {
+                        apiEndpoint = parts[1].trim().replace("\"", "").replace("'", "");
+                    }
+                } else if (line.contains("cloudApiKey")) {
+                    String[] parts = line.split("=");
+                    if (parts.length > 1) {
+                        apiKey = parts[1].trim().replace("\"", "").replace("'", "");
+                    }
+                }
+            }
+            
+            if (federatedEnabled && (!repoUrl.isEmpty() || !apiEndpoint.isEmpty())) {
+                LOGGER.info("Enabling federated learning...");
+                LOGGER.info("  Repository: {}", repoUrl.isEmpty() ? "None" : repoUrl);
+                LOGGER.info("  Cloud API: {}", apiEndpoint.isEmpty() ? "None" : apiEndpoint);
+                
+                MobBehaviorAI ai = getMobBehaviorAI();
+                ai.enableFederatedLearning(
+                    repoUrl.isEmpty() ? null : repoUrl,
+                    apiEndpoint.isEmpty() ? null : apiEndpoint,
+                    apiKey.isEmpty() ? null : apiKey
+                );
+                
+                LOGGER.info("✓ Federated learning enabled - Global AI knowledge sharing active!");
+            } else {
+                LOGGER.info("Federated learning disabled in config");
+            }
+            
+        } catch (Exception e) {
+            LOGGER.error("Failed to initialize federated learning: {}", e.getMessage());
+        }
     }
 }

@@ -30,6 +30,9 @@ public class MobBehaviorAI {
     private TacticKnowledgeBase tacticKnowledgeBase;
     private ModelPersistence modelPersistence;
     
+    // Federated learning (optional)
+    private FederatedLearning federatedLearning;
+    
     private boolean mlEnabled = false;
     private final Map<String, MobBehaviorProfile> behaviorProfiles = new HashMap<>();
     private final Map<String, MobState> lastStateCache = new HashMap<>();
@@ -80,6 +83,32 @@ public class MobBehaviorAI {
         } catch (Exception e) {
             LOGGER.warn("Failed to initialize ML systems, using rule-based fallback: {}", e.getMessage());
             mlEnabled = false;
+        }
+    }
+    
+    /**
+     * Enable federated learning with Git repository or cloud API
+     */
+    public void enableFederatedLearning(String repoUrl, String cloudApiEndpoint, String cloudApiKey) {
+        if (repoUrl == null && cloudApiEndpoint == null) {
+            LOGGER.info("Federated learning disabled - no repository or API configured");
+            return;
+        }
+        
+        try {
+            federatedLearning = new FederatedLearning(
+                modelPersistence != null ? modelPersistence.detectModelPath().resolve("federated") : java.nio.file.Paths.get("federated"),
+                repoUrl != null ? repoUrl : ""
+            );
+            
+            // Link to knowledge base
+            if (tacticKnowledgeBase != null) {
+                tacticKnowledgeBase.setFederatedLearning(federatedLearning);
+            }
+            
+            LOGGER.info("Federated learning enabled - All servers will share AI knowledge");
+        } catch (Exception e) {
+            LOGGER.error("Failed to enable federated learning: {}", e.getMessage());
         }
     }
 

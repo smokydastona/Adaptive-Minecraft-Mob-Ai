@@ -53,3 +53,29 @@
 	
 	#Enable experimental features
 	experimentalFeatures = false
+
+[federated_learning]
+	#Enable federated learning (share knowledge across all servers)
+	enableFederatedLearning = false
+	
+	#Git repository URL for knowledge sharing (e.g., "https://github.com/username/mca-knowledge.git")
+	#Leave empty to disable Git sync
+	federatedRepoUrl = ""
+	
+	#Cloud API endpoint for faster sync (alternative to Git)
+	#Example: "https://your-server.com/api/knowledge"
+	cloudApiEndpoint = ""
+	
+	#Cloud API key for authentication (optional)
+	cloudApiKey = ""
+	
+	#Minimum data points before contributing to federated knowledge
+	#Range: 5 ~ 100
+	minDataPointsToContribute = 10
+	
+	#Enable automatic pull from federated repository
+	autoDownloadKnowledge = true
+	
+	#Sync interval in minutes
+	#Range: 5 ~ 60
+	syncIntervalMinutes = 5
