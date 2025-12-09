@@ -129,8 +129,8 @@ public class GANCityMod {
             
             // Parse TOML config
             java.util.List<String> lines = java.nio.file.Files.readAllLines(configPath);
-            boolean federatedEnabled = false;
-            String repoUrl = "";
+            boolean federatedEnabled = true; // Default enabled with hardcoded repo
+            String repoUrl = "https://github.com/smokydastona/Mob-Knowledge.git"; // Hardcoded default
             String apiEndpoint = "";
             String apiKey = "";
             
