@@ -142,7 +142,7 @@ public class DoubleDQN {
                         // Ignore
                     }
                 });
-        } catch (IOException e) {
+        } catch (IOException | ai.djl.MalformedModelException e) {
             LOGGER.error("Failed to sync target network", e);
         }
     }
@@ -205,7 +205,7 @@ public class DoubleDQN {
         targetNetwork.save(path, "target");
     }
     
-    public void load(Path path) throws IOException {
+    public void load(Path path) throws IOException, ai.djl.MalformedModelException {
         policyNetwork.load(path, "policy");
         targetNetwork.load(path, "target");
     }
