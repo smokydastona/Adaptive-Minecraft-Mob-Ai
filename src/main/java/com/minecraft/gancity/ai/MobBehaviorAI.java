@@ -506,11 +506,11 @@ public class MobBehaviorAI {
                 float[] tdErrors = doubleDQN.trainBatch(batch.experiences);
                 
                 // Update priorities based on TD errors
-                int[] indices = new int[batch.experiences.size()];
-                for (int i = 0; i < batch.experiences.size(); i++) {
-                    indices[i] = i;
+                List<Float> tdErrorList = new ArrayList<>();
+                for (float error : tdErrors) {
+                    tdErrorList.add(error);
                 }
-                replayBuffer.updatePriorities(indices, tdErrors);
+                replayBuffer.updatePriorities(batch.prioritizedExperiences, tdErrorList);
             }
             
             // Update curriculum learning
