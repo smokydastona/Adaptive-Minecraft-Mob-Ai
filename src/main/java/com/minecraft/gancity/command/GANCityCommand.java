@@ -3,6 +3,7 @@ package com.minecraft.gancity.command;
 import com.minecraft.gancity.GANCityMod;
 import com.minecraft.gancity.ai.MobBehaviorAI;
 import com.minecraft.gancity.ai.VillagerDialogueAI;
+import com.minecraft.gancity.compat.ModCompatibility;
 import com.minecraft.gancity.mca.MCAIntegration;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -30,6 +31,8 @@ public class GANCityCommand {
                 .executes(GANCityCommand::showInfo))
             .then(Commands.literal("stats")
                 .executes(GANCityCommand::showStats))
+            .then(Commands.literal("compat")
+                .executes(GANCityCommand::showCompatibility))
         );
     }
 
@@ -86,8 +89,9 @@ public class GANCityCommand {
         }
         source.sendSuccess(() -> Component.literal(""), false);
         source.sendSuccess(() -> Component.literal("§eCommands:§r"), false);
-        source.sendSuccess(() -> Component.literal("  /mcaai info - Show this information"), false);
+        source.sendSuccess(() -> Component.literal("  /mcaai info - Show mod information"), false);
         source.sendSuccess(() -> Component.literal("  /mcaai stats - View AI statistics"), false);
+        source.sendSuccess(() -> Component.literal("  /mcaai compat - View mod compatibility report"), false);
         source.sendSuccess(() -> Component.literal("  /mcaai test dialogue <type> - Test dialogue generation"), false);
         
         if (!mcaLoaded) {
@@ -95,6 +99,24 @@ public class GANCityCommand {
             source.sendSuccess(() -> Component.literal("§cNote: Install MCA Reborn for full features!§r"), false);
             source.sendSuccess(() -> Component.literal("§eDownload: https://www.curseforge.com/minecraft/mc-mods/minecraft-comes-alive-reborn§r"), false);
         }
+        
+        return 1;
+    }
+    
+    private static int showCompatibility(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        
+        String report = ModCompatibility.getCompatibilityReport();
+        for (String line : report.split("\n")) {
+            source.sendSuccess(() -> Component.literal(line), false);
+        }
+        
+        source.sendSuccess(() -> Component.literal(""), false);
+        source.sendSuccess(() -> Component.literal("§eRecommended Mods for Enhanced AI:§r"), false);
+        source.sendSuccess(() -> Component.literal("  • Curios API - Better equipment detection"), false);
+        source.sendSuccess(() -> Component.literal("  • FTB Teams - Multiplayer team AI"), false);
+        source.sendSuccess(() -> Component.literal("  • Epic Fight - Advanced combat move recognition"), false);
+        source.sendSuccess(() -> Component.literal("  • Alex's Mobs - Extended mob behavior patterns"), false);
         
         return 1;
     }

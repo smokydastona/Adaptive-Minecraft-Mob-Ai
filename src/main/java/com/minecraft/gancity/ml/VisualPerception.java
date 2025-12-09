@@ -1,5 +1,7 @@
 package com.minecraft.gancity.ml;
 
+import com.minecraft.gancity.compat.CuriosIntegration;
+import com.minecraft.gancity.compat.ModCompatibility;
 import com.mojang.logging.LogUtils;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -32,6 +34,16 @@ public class VisualPerception {
         
         state.armorLevel = calculateArmorLevel(helmet, chest, legs, boots);
         state.hasShield = player.getOffhandItem().is(Items.SHIELD);
+        
+        // Curios API integration - check for trinkets/baubles
+        if (ModCompatibility.isCuriosLoaded()) {
+            state.hasMagicalTrinkets = CuriosIntegration.hasMagicalTrinkets(player);
+            state.curioEnhancement = CuriosIntegration.getCurioEnhancementFactor(player);
+            
+            // Adjust armor level if player has protective curios
+            float curioProtection = CuriosIntegration.getTotalProtectionWithCurios(player);
+            state.armorLevel = Math.max(state.armorLevel, curioProtection / 20.0f);
+        }
         
         // Weapon analysis
         ItemStack mainHand = player.getMainHandItem();
@@ -184,6 +196,10 @@ public class VisualPerception {
         public boolean isSneaking = false;
         public boolean isBlocking = false;
         
+        // Curios integration fields
+        public boolean hasMagicalTrinkets = false;
+        public float curioEnhancement = 1.0f;
+        
         public float[] toFeatureVector() {
             return new float[] {
                 armorLevel,
@@ -192,7 +208,9 @@ public class VisualPerception {
                 hasRangedWeapon ? 1.0f : 0.0f,
                 isSprinting ? 1.0f : 0.0f,
                 isSneaking ? 1.0f : 0.0f,
-                isBlocking ? 1.0f : 0.0f
+                isBlocking ? 1.0f : 0.0f,
+                hasMagicalTrinkets ? 1.0f : 0.0f,
+                (curioEnhancement - 1.0f) / 0.3f  // Normalize 1.0-1.3 to 0.0-1.0
             };
         }
     }

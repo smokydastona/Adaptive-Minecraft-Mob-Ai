@@ -42,8 +42,8 @@ public class MobBehaviorAI {
      */
     private void initializeAdvancedMLSystems() {
         try {
-            // Core learning - 20 input features (state + visual + genome)
-            doubleDQN = new DoubleDQN(20, 10);  // 20 state features, 10 actions
+            // Core learning - 22 input features (state + visual + genome)
+            doubleDQN = new DoubleDQN(22, 10);  // 22 state features, 10 actions
             replayBuffer = new PrioritizedReplayBuffer(10000);
             
             // Multi-agent coordination
@@ -259,15 +259,15 @@ public class MobBehaviorAI {
     private float[] combineFeatures(MobState state, VisualPerception.VisualState visual, 
                                     GeneticBehaviorEvolution.BehaviorGenome genome) {
         float[] stateFeatures = stateToFeatureVector(state);
-        float[] visualFeatures = visual != null ? visual.toFeatureVector() : new float[7];
+        float[] visualFeatures = visual != null ? visual.toFeatureVector() : new float[9];
         
-        // Combine: [state(10) + visual(7) + genome(3)] = 20 features
-        float[] combined = new float[20];
+        // Combine: [state(10) + visual(9) + genome(3)] = 22 features
+        float[] combined = new float[22];
         System.arraycopy(stateFeatures, 0, combined, 0, 10);
-        System.arraycopy(visualFeatures, 0, combined, 10, 7);
-        combined[17] = genome.aggression;
-        combined[18] = genome.caution;
-        combined[19] = genome.teamwork;
+        System.arraycopy(visualFeatures, 0, combined, 10, 9);
+        combined[19] = genome.aggression;
+        combined[20] = genome.caution;
+        combined[21] = genome.teamwork;
         
         return combined;
     }
