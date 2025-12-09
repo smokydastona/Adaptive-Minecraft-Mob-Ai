@@ -23,6 +23,13 @@ public class MobBehaviorAI {
     private VisualPerception visualPerception;
     private GeneticBehaviorEvolution geneticEvolution;
     
+    // New AI-Player inspired systems
+    private TaskChainSystem taskChainSystem;
+    private ReflexModule reflexModule;
+    private AutonomousGoals autonomousGoals;
+    private TacticKnowledgeBase tacticKnowledgeBase;
+    private ModelPersistence modelPersistence;
+    
     private boolean mlEnabled = false;
     private final Map<String, MobBehaviorProfile> behaviorProfiles = new HashMap<>();
     private final Map<String, MobState> lastStateCache = new HashMap<>();
@@ -58,8 +65,18 @@ public class MobBehaviorAI {
             // Genetic evolution
             geneticEvolution = new GeneticBehaviorEvolution();
             
+            // New AI-Player inspired systems
+            taskChainSystem = new TaskChainSystem();
+            reflexModule = new ReflexModule();
+            autonomousGoals = new AutonomousGoals();
+            tacticKnowledgeBase = new TacticKnowledgeBase();
+            modelPersistence = new ModelPersistence();
+            
+            // Load saved models if available
+            modelPersistence.loadAll(doubleDQN, replayBuffer, tacticKnowledgeBase);
+            
             mlEnabled = true;
-            LOGGER.info("Advanced ML systems initialized - Double DQN, Prioritized Replay, Multi-Agent, Curriculum, Vision, Genetic");
+            LOGGER.info("Advanced ML systems initialized - DQN, Replay, Multi-Agent, Curriculum, Vision, Genetic, Tasks, Reflexes, Goals, Knowledge, Persistence");
         } catch (Exception e) {
             LOGGER.warn("Failed to initialize ML systems, using rule-based fallback: {}", e.getMessage());
             mlEnabled = false;
@@ -590,6 +607,29 @@ public class MobBehaviorAI {
     public float getAggressionLevel(String mobType) {
         MobBehaviorProfile profile = behaviorProfiles.get(mobType.toLowerCase());
         return profile != null ? profile.getAggressionLevel() : 0.5f;
+    }
+    
+    /**
+     * Accessors for new systems
+     */
+    public TaskChainSystem getTaskChainSystem() {
+        return taskChainSystem;
+    }
+    
+    public ReflexModule getReflexModule() {
+        return reflexModule;
+    }
+    
+    public AutonomousGoals getAutonomousGoals() {
+        return autonomousGoals;
+    }
+    
+    public TacticKnowledgeBase getTacticKnowledgeBase() {
+        return tacticKnowledgeBase;
+    }
+    
+    public ModelPersistence getModelPersistence() {
+        return modelPersistence;
     }
 
     /**
