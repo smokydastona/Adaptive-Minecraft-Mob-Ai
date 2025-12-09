@@ -123,8 +123,8 @@ public class GANCityMod {
             java.nio.file.Path configPath = java.nio.file.Paths.get("config", "mca-ai-enhanced-common.toml");
             
             if (!java.nio.file.Files.exists(configPath)) {
-                LOGGER.info("Config file not found, federated learning disabled");
-                return;
+                LOGGER.info("Config file not found, creating default config...");
+                createDefaultConfig(configPath);
             }
             
             // Parse TOML config
@@ -175,6 +175,24 @@ public class GANCityMod {
             
         } catch (Exception e) {
             LOGGER.error("Failed to initialize federated learning: {}", e.getMessage());
+        }
+    }
+    
+    /**
+     * Create default config file
+     */
+    private void createDefaultConfig(java.nio.file.Path configPath) throws java.io.IOException {
+        // Create config directory if it doesn't exist
+        java.nio.file.Files.createDirectories(configPath.getParent());
+        
+        // Copy from resources to config directory
+        try (java.io.InputStream inputStream = getClass().getResourceAsStream("/mca-ai-enhanced-common.toml")) {
+            if (inputStream != null) {
+                java.nio.file.Files.copy(inputStream, configPath);
+                LOGGER.info("Created default config at {}", configPath);
+            } else {
+                LOGGER.error("Could not find default config in resources");
+            }
         }
     }
 }

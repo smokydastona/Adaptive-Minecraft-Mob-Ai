@@ -9,7 +9,7 @@ version = project.hasProperty('mod_version') ? project.mod_version : '1.0.0'
 group = 'com.minecraft.gancity'
 
 base {
-    archivesName = 'mca-ai-enhanced'
+    archivesName = 'ai-overhaul-experiment'
 }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
