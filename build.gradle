@@ -120,37 +120,6 @@ tasks.named('jar', Jar).configure {
     finalizedBy 'reobfJar'
 }
 
-// Create optional ML libraries JAR - must be a proper mod JAR with mods.toml
-task mlLibsJar(type: Jar) {
-    archiveClassifier = 'libs'
-    
-    from {
-        configurations.mlLibs.collect { it.isDirectory() ? it : zipTree(it) }
-    }
-    
-    // Add mods.toml so Forge recognizes it as a mod
-    from('src/main/resources-libs') {
-        include 'META-INF/mods.toml'
-    }
-    
-    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    
-    manifest {
-        attributes([
-                'Specification-Title'     : 'MCA AI Enhanced - ML Libraries',
-                'Specification-Vendor'    : 'GAN City Team',
-                'Specification-Version'   : '1',
-                'Implementation-Title'    : 'ai-overhaul-experiment-libs',
-                'Implementation-Version'  : version,
-                'Implementation-Vendor'   : 'GAN City Team'
-        ])
-    }
-}
-
-// Build ML libs JAR as part of standard build
-build.dependsOn mlLibsJar
-
 publishing {
     publications {
         register('mavenJava', MavenPublication) {
