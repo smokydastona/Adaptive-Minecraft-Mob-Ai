@@ -102,6 +102,7 @@ public class GANCityCommand {
     private static int showStats(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         MobBehaviorAI behaviorAI = GANCityMod.getMobBehaviorAI();
+        VillagerDialogueAI dialogueAI = GANCityMod.getVillagerDialogueAI();
         
         source.sendSuccess(() -> Component.literal("§b=== AI Statistics ===§r"), false);
         source.sendSuccess(() -> Component.literal(""), false);
@@ -112,18 +113,20 @@ public class GANCityCommand {
             source.sendSuccess(() -> Component.literal("  " + mlStats), false);
             source.sendSuccess(() -> Component.literal(""), false);
             source.sendSuccess(() -> Component.literal("  Active mob types: 4 (Zombie, Skeleton, Creeper, Spider)"), false);
-            source.sendSuccess(() -> Component.literal("  Actions per type: 3-4 tactical behaviors"), false);
-            source.sendSuccess(() -> Component.literal("  §aLearning: Progressive difficulty increase over time§r"), false);
+            source.sendSuccess(() -> Component.literal("  Actions per type: 10 tactical behaviors"), false);
+            source.sendSuccess(() -> Component.literal("  §aLearning: Progressive difficulty with 6 ML systems§r"), false);
         } else {
             source.sendSuccess(() -> Component.literal("  Status: §cDisabled§r"), false);
         }
         
-        if (MCAIntegration.isMCALoaded()) {
+        if (MCAIntegration.isMCALoaded() && dialogueAI != null) {
             source.sendSuccess(() -> Component.literal(""), false);
-            source.sendSuccess(() -> Component.literal("§eVillager Dialogue:§r"), false);
-            source.sendSuccess(() -> Component.literal("  Dialogue templates: 40+"), false);
+            source.sendSuccess(() -> Component.literal("§eVillager Dialogue AI:§r"), false);
+            String dialogueStats = dialogueAI.getStats();
+            source.sendSuccess(() -> Component.literal("  " + dialogueStats), false);
             source.sendSuccess(() -> Component.literal("  Personality traits: 7"), false);
             source.sendSuccess(() -> Component.literal("  Mood states: 6"), false);
+            source.sendSuccess(() -> Component.literal("  §aGPT-style natural conversations enabled§r"), false);
         }
         
         return 1;

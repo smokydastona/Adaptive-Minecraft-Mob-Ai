@@ -8,6 +8,7 @@ import ai.djl.ndarray.NDManager;
 import ai.djl.translate.Batchifier;
 import ai.djl.translate.Translator;
 import ai.djl.translate.TranslatorContext;
+import com.minecraft.gancity.ml.TransformerDialogue;
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
@@ -18,13 +19,15 @@ import java.util.*;
 
 /**
  * AI-powered dialogue generation system for MCA villagers
- * Generates contextual responses and learns personality traits
+ * Now with GPT-style transformer dialogue for natural conversations
  */
 public class VillagerDialogueAI {
     private static final Logger LOGGER = LogUtils.getLogger();
     
     private boolean aiEnabled = false;
+    private boolean transformerEnabled = false;
     private Model dialogueModel;
+    private TransformerDialogue transformerDialogue;
     private final Map<UUID, VillagerPersonality> villagerPersonalities = new HashMap<>();
     private final Random random = new Random();
 
@@ -113,10 +116,25 @@ public class VillagerDialogueAI {
 
     public VillagerDialogueAI() {
         tryLoadAIModel();
+        tryLoadTransformerDialogue();
+    }
+    
+    /**
+     * Initialize GPT-style transformer dialogue system
+     */
+    private void tryLoadTransformerDialogue() {
+        try {
+            transformerDialogue = new TransformerDialogue();
+            transformerEnabled = true;
+            LOGGER.info("Transformer dialogue system activated - villagers will use GPT-style conversations");
+        } catch (Exception e) {
+            LOGGER.warn("Transformer dialogue not available, using template system: {}", e.getMessage());
+            transformerEnabled = false;
+        }
     }
 
     /**
-     * Try to load dialogue generation AI model
+     * Try to load dialogue AI model if available
      */
     private void tryLoadAIModel() {
         try {
@@ -138,21 +156,58 @@ public class VillagerDialogueAI {
      * Generate dialogue response based on context
      */
     public String generateDialogue(UUID villagerId, DialogueContext context) {
+        return generateDialogue(villagerId, "", context);
+    }
+    
+    /**
+     * Generate dialogue response with player message input
+     */
+    public String generateDialogue(UUID villagerId, String playerMessage, DialogueContext context) {
         VillagerPersonality personality = getOrCreatePersonality(villagerId);
         
-        if (aiEnabled) {
+        // Use transformer dialogue if enabled and player provided message
+        if (transformerEnabled && transformerDialogue != null && !playerMessage.isEmpty()) {
+            return generateWithTransformer(villagerId, playerMessage, personality, context);
+        } else if (aiEnabled) {
             return generateWithAI(personality, context);
         } else {
             return generateWithTemplates(personality, context);
         }
     }
+    
+    /**
+     * GPT-style transformer dialogue generation
+     */
+    private String generateWithTransformer(String villagerId, String playerMessage, 
+                                           VillagerPersonality personality, DialogueContext context) {
+        // Build context for transformer
+        TransformerDialogue.DialogueContext transformerContext = new TransformerDialogue.DialogueContext()
+            .profession(context.profession != null ? context.profession : "villager")
+            .personality(personality.getTraitName())
+            .mood(personality.getMood())
+            .relationship(personality.getRelationshipLevel(context.playerId))
+            .biome(context.biome != null ? context.biome : "plains")
+            .name(context.villagerName != null ? context.villagerName : "Villager");
+        
+        // Add recent events if any
+        if (context.recentEvents != null && context.recentEvents.length > 0) {
+            transformerContext.events(context.recentEvents);
+        }
+        
+        // Generate response
+        String response = transformerDialogue.generateResponse(villagerId, playerMessage, transformerContext);
+        
+        // Update personality based on interaction
+        personality.recordInteraction(context.interactionType, playerMessage);
+        
+        return response;
+    }
 
     /**
-     * AI-powered dialogue generation
+     * AI-powered dialogue generation (legacy system)
      */
     private String generateWithAI(VillagerPersonality personality, DialogueContext context) {
-        // TODO: Use transformer model (GPT-like) for generation
-        // For now, use enhanced template system
+        // Fallback to templates for now
         return generateWithTemplates(personality, context);
     }
 
@@ -263,16 +318,34 @@ public class VillagerDialogueAI {
     }
 
     /**
+     * Get dialogue statistics
+     */
+    public String getStats() {
+        if (transformerEnabled && transformerDialogue != null) {
+            Map<String, Integer> stats = transformerDialogue.getStats();
+            return String.format("Transformer Dialogue Active | Conversations: %d | Messages: %d | Personalities: %d",
+                stats.get("active_conversations"),
+                stats.get("total_messages"),
+                villagerPersonalities.size());
+        }
+        return String.format("Template Dialogue | Personalities tracked: %d", villagerPersonalities.size());
+    }
+    
+    /**
      * Context for dialogue generation
      */
     public static class DialogueContext {
         public String interactionType; // greeting, small_talk, gift, flirt, etc.
         public String playerName;
+        public UUID playerId;
+        public String profession;
+        public String villagerName;
         public String biome;
         public String villageName;
         public String itemName;
         public int relationshipLevel;
         public String timeOfDay;
+        public String[] recentEvents;
         public Map<String, Object> customData = new HashMap<>();
 
         public DialogueContext(String interactionType) {
@@ -336,6 +409,43 @@ public class VillagerDialogueAI {
                 traits.put("romantic", Math.min(1.0f, traits.getOrDefault("romantic", 0.5f) + 0.01f));
                 normalizeTraits();
             }
+        }
+        
+        /**
+         * Get dominant personality trait name
+         */
+        public String getTraitName() {
+            float maxValue = 0.0f;
+            String dominantTrait = "friendly";
+            
+            for (Map.Entry<String, Float> entry : traits.entrySet()) {
+                if (entry.getValue() > maxValue) {
+                    maxValue = entry.getValue();
+                    dominantTrait = entry.getKey();
+                }
+            }
+            
+            return dominantTrait;
+        }
+        
+        /**
+         * Get relationship level description
+         */
+        public String getRelationshipLevel(UUID playerId) {
+            // Would normally track per-player relationships
+            // For now, return based on interaction count
+            int interactions = successfulDialogue.size() + unsuccessfulDialogue.size();
+            if (interactions < 3) return "stranger";
+            if (interactions < 10) return "acquaintance";
+            if (interactions < 25) return "friend";
+            return "loved";
+        }
+        
+        /**
+         * Get current mood as string
+         */
+        public String getMood() {
+            return currentMood.toString().toLowerCase();
         }
     }
 
