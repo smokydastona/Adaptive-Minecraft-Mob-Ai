@@ -51,18 +51,13 @@ jobs:
     - name: List build artifacts
       run: ls -la build/libs/
     
-    - name: Upload main mod JAR
+    - name: Upload both JARs together
       uses: actions/upload-artifact@v4
       with:
         name: ai-overhaul-experiment-${{ steps.version.outputs.VERSION }}
-        path: build/libs/ai-overhaul-experiment-${{ steps.version.outputs.VERSION }}.jar
-        retention-days: 90
-    
-    - name: Upload optional ML libraries JAR
-      uses: actions/upload-artifact@v4
-      with:
-        name: ai-overhaul-experiment-libs-${{ steps.version.outputs.VERSION }}
-        path: build/libs/ai-overhaul-experiment-${{ steps.version.outputs.VERSION }}-libs.jar
+        path: |
+          build/libs/ai-overhaul-experiment-${{ steps.version.outputs.VERSION }}.jar
+          build/libs/ai-overhaul-experiment-${{ steps.version.outputs.VERSION }}-libs.jar
         retention-days: 90
     
     - name: Create Release
