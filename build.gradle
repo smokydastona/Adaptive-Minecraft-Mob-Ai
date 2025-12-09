@@ -12,6 +12,15 @@ base {
     archivesName = 'ai-overhaul-experiment'
 }
 
+// Configure jarJar to use custom name for -all.jar
+tasks.register('configureJarJar') {
+    doFirst {
+        tasks.named('jarJar').configure {
+            archiveBaseName = 'Adaptive-Mob-Ai'
+        }
+    }
+}
+
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
 minecraft {
@@ -118,6 +127,11 @@ tasks.named('jar', Jar).configure {
 
     jarJar.enable()
     finalizedBy 'reobfJar'
+}
+
+// Rename the -all.jar produced by jarJar
+tasks.named('jarJar').configure {
+    archiveBaseName = 'Adaptive-Mob-Ai'
 }
 
 publishing {
