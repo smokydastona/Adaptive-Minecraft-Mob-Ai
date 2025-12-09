@@ -16,6 +16,8 @@ public class PrioritizedReplayBuffer {
     private float beta = 0.4f;   // Importance sampling exponent
     private float betaIncrement = 0.001f;
     private float maxPriority = 1.0f;
+    private int addCounter = 0;
+    private static final int CLEANUP_FREQUENCY = 100; // Cleanup every 100 adds
     
     public PrioritizedReplayBuffer(int capacity) {
         this.capacity = capacity;
@@ -32,7 +34,9 @@ public class PrioritizedReplayBuffer {
         
         // Remove oldest if at capacity
         while (buffer.size() >= capacity) {
-            buffer.poll();
+            Experience removed = buffer.poll();
+            // Also remove from priority queue
+            priorityQueue.removeIf(pExp -> pExp.experience == removed);
         }
         
         buffer.offer(exp);
@@ -40,6 +44,20 @@ public class PrioritizedReplayBuffer {
         // Add to priority queue with max priority (new experiences are important)
         PrioritizedExperience pExp = new PrioritizedExperience(exp, maxPriority);
         priorityQueue.offer(pExp);
+        
+        // Periodic cleanup to prevent memory bloat
+        addCounter++;
+        if (addCounter % CLEANUP_FREQUENCY == 0) {
+            cleanupQueue();
+        }
+    }
+    
+    /**
+     * Remove stale entries from priority queue
+     */
+    private void cleanupQueue() {
+        Set<Experience> validExperiences = new HashSet<>(buffer);
+        priorityQueue.removeIf(pExp -> !validExperiences.contains(pExp.experience));
     }
     
     /**

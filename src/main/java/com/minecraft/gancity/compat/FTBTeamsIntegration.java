@@ -20,9 +20,9 @@ public class FTBTeamsIntegration {
     private static Method getTeamMembersMethod = null;
     
     // Cache for team lookups
-    private static final Map<UUID, Set<UUID>> teamCache = new HashMap<>();
-    private static long lastCacheUpdate = 0;
+    private static final Map<UUID, CachedTeamData> teamCache = new HashMap<>();
     private static final long CACHE_DURATION = 30000; // 30 seconds
+    private static final int MAX_CACHE_SIZE = 100;
     
     /**
      * Initialize FTB Teams integration via reflection
@@ -72,8 +72,16 @@ public class FTBTeamsIntegration {
         
         // Check cache first
         long now = System.currentTimeMillis();
-        if (now - lastCacheUpdate < CACHE_DURATION && teamCache.containsKey(playerId)) {
-            return teamCache.get(playerId);
+        CachedTeamData cached = teamCache.get(playerId);
+        if (cached != null && (now - cached.timestamp) < CACHE_DURATION) {
+            return cached.teamMembers;
+        }
+        
+        // Evict old entries
+        if (teamCache.size() > MAX_CACHE_SIZE) {
+            teamCache.entrySet().removeIf(entry -> 
+                (now - entry.getValue().timestamp) > CACHE_DURATION * 2
+            );
         }
         
         try {
@@ -86,10 +94,7 @@ public class FTBTeamsIntegration {
             // Placeholder - full implementation requires FTB Teams as dependency
             
             // Update cache
-            teamCache.put(playerId, teamMembers);
-            if (teamCache.size() == 1) {
-                lastCacheUpdate = now;
-            }
+            teamCache.put(playerId, new CachedTeamData(teamMembers, now));
             
             return teamMembers;
             
@@ -195,6 +200,16 @@ public class FTBTeamsIntegration {
         } catch (Exception e) {
             LOGGER.debug("Error checking coordinated team: {}", e.getMessage());
             return false;
+        }
+    }
+    
+    private static class CachedTeamData {
+        final Set<UUID> teamMembers;
+        final long timestamp;
+        
+        CachedTeamData(Set<UUID> teamMembers, long timestamp) {
+            this.teamMembers = teamMembers;
+            this.timestamp = timestamp;
         }
     }
 }

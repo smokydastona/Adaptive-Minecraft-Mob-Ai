@@ -6,8 +6,7 @@ import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**
  * Curios API integration for detecting trinkets, baubles, and accessories
@@ -20,6 +19,11 @@ public class CuriosIntegration {
     private static Class<?> curiosApiClass = null;
     private static Method getCuriosHelperMethod = null;
     private static Method getEquippedCuriosMethod = null;
+    
+    // Cache for frequently called methods
+    private static final Map<UUID, CachedCurioData> curioCache = new HashMap<>();
+    private static final long CACHE_DURATION_MS = 1000; // 1 second cache
+    private static final int MAX_CACHE_SIZE = 50;
     
     /**
      * Initialize Curios integration via reflection
@@ -169,5 +173,32 @@ public class CuriosIntegration {
         }
         
         return 1.0f;
+    }
+    
+    /**
+     * Update cache with curio data
+     */
+    private static void updateCache(UUID playerId, boolean hasTrinkets, float enhancement) {
+        // Evict old entries if cache too large
+        if (curioCache.size() > MAX_CACHE_SIZE) {
+            long now = System.currentTimeMillis();
+            curioCache.entrySet().removeIf(entry -> 
+                (now - entry.getValue().timestamp) > CACHE_DURATION_MS * 2
+            );
+        }
+        
+        curioCache.put(playerId, new CachedCurioData(hasTrinkets, enhancement, System.currentTimeMillis()));
+    }
+    
+    private static class CachedCurioData {
+        final boolean hasMagicalTrinkets;
+        final float enhancement;
+        final long timestamp;
+        
+        CachedCurioData(boolean hasTrinkets, float enhancement, long timestamp) {
+            this.hasMagicalTrinkets = hasTrinkets;
+            this.enhancement = enhancement;
+            this.timestamp = timestamp;
+        }
     }
 }

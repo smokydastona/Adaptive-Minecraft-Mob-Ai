@@ -4,6 +4,7 @@ import com.minecraft.gancity.compat.CuriosIntegration;
 import com.minecraft.gancity.compat.ModCompatibility;
 import com.mojang.logging.LogUtils;
 import net.minecraft.world.entity.player.Player;
+import java.util.UUID;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -19,11 +20,30 @@ public class VisualPerception {
     private static final Logger LOGGER = LogUtils.getLogger();
     
     private final Map<String, PlayerProfile> playerProfiles = new HashMap<>();
+    private final Map<UUID, CachedVisualState> visualCache = new HashMap<>();
+    private static final long CACHE_DURATION_MS = 500; // Cache for 500ms
+    private static final int MAX_CACHE_SIZE = 100; // Prevent memory bloat
     
     /**
-     * Analyze player visual state
+     * Analyze player visual state (with caching)
      */
     public VisualState analyzePlayer(Player player) {
+        UUID playerId = player.getUUID();
+        long currentTime = System.currentTimeMillis();
+        
+        // Check cache first
+        CachedVisualState cached = visualCache.get(playerId);
+        if (cached != null && (currentTime - cached.timestamp) < CACHE_DURATION_MS) {
+            return cached.state;
+        }
+        
+        // Evict old cache entries if needed
+        if (visualCache.size() > MAX_CACHE_SIZE) {
+            visualCache.entrySet().removeIf(entry -> 
+                (currentTime - entry.getValue().timestamp) > CACHE_DURATION_MS * 2
+            );
+        }
+        
         VisualState state = new VisualState();
         
         // Armor analysis
@@ -55,6 +75,9 @@ public class VisualPerception {
         state.isSprinting = player.isSprinting();
         state.isSneaking = player.isCrouching();
         state.isBlocking = player.isBlocking();
+        
+        // Cache result
+        visualCache.put(playerId, new CachedVisualState(state, currentTime));
         
         return state;
     }
@@ -221,5 +244,15 @@ public class VisualPerception {
         Map<String, Integer> commonActions = new HashMap<>();
         int aggressiveStyle = 0;
         int cautiousStyle = 0;
+    }
+    
+    private static class CachedVisualState {
+        final VisualState state;
+        final long timestamp;
+        
+        CachedVisualState(VisualState state, long timestamp) {
+            this.state = state;
+            this.timestamp = timestamp;
+        }
     }
 }

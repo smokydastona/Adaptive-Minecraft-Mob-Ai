@@ -13,6 +13,7 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModList;
@@ -22,6 +23,7 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
 
 @Mod(GANCityMod.MODID)
+@Mod.EventBusSubscriber(modid = GANCityMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.DEDICATED_SERVER)
 public class GANCityMod {
     public static final String MODID = "gancity";
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -36,16 +38,17 @@ public class GANCityMod {
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
-        LOGGER.info("MCA AI Enhanced - Initializing AI systems...");
+        LOGGER.info("MCA AI Enhanced - Initializing AI systems (SERVER-ONLY)...");
         
-        // Initialize mod compatibility system
-        ModCompatibility.init();
-        CuriosIntegration.init();
-        FTBTeamsIntegration.init();
+        // Initialize mod compatibility system (async for performance)
+        event.enqueueWork(() -> {
+            ModCompatibility.init();
+            CuriosIntegration.init();
+            FTBTeamsIntegration.init();
+        });
         
-        // Initialize AI systems
-        mobBehaviorAI = new MobBehaviorAI();
-        villagerDialogueAI = new VillagerDialogueAI();
+        // Initialize AI systems (lazy - only when first needed)
+        // mobBehaviorAI and villagerDialogueAI initialized on first access
         
         // Check if MCA Reborn is loaded
         boolean mcaLoaded = ModList.get().isLoaded("mca");
@@ -81,10 +84,26 @@ public class GANCityMod {
     }
 
     public static MobBehaviorAI getMobBehaviorAI() {
+        if (mobBehaviorAI == null) {
+            synchronized (GANCityMod.class) {
+                if (mobBehaviorAI == null) {
+                    LOGGER.info("Lazy-initializing MobBehaviorAI...");
+                    mobBehaviorAI = new MobBehaviorAI();
+                }
+            }
+        }
         return mobBehaviorAI;
     }
     
     public static VillagerDialogueAI getVillagerDialogueAI() {
+        if (villagerDialogueAI == null) {
+            synchronized (GANCityMod.class) {
+                if (villagerDialogueAI == null) {
+                    LOGGER.info("Lazy-initializing VillagerDialogueAI...");
+                    villagerDialogueAI = new VillagerDialogueAI();
+                }
+            }
+        }
         return villagerDialogueAI;
     }
 

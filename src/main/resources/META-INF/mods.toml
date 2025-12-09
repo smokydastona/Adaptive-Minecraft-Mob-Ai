@@ -21,18 +21,18 @@ Powered by Deep Java Library (DJL) for AI inference.
     mandatory=true
     versionRange="[47,)"
     ordering="NONE"
-    side="BOTH"
+    side="SERVER"
 
 [[dependencies.gancity]]
     modId="minecraft"
     mandatory=true
     versionRange="[1.20.1,1.21)"
     ordering="NONE"
-    side="BOTH"
+    side="SERVER"
 
 [[dependencies.gancity]]
     modId="mca"
-    mandatory=true
+    mandatory=false
     versionRange="[7.5.5,)"
     ordering="AFTER"
-    side="BOTH"
+    side="SERVER"

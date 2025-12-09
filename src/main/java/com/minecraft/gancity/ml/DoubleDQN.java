@@ -39,10 +39,22 @@ public class DoubleDQN {
     private Trainer trainer;
     private int updateCounter = 0;
     private static final int TARGET_UPDATE_FREQUENCY = 100;
+    private boolean initialized = false;
     
     public DoubleDQN() {
-        manager = NDManager.newBaseManager();
-        createNetworks();
+        // Lazy initialization - only create when first needed
+    }
+    
+    private void ensureInitialized() {
+        if (!initialized) {
+            synchronized (this) {
+                if (!initialized) {
+                    manager = NDManager.newBaseManager();
+                    createNetworks();
+                    initialized = true;
+                }
+            }
+        }
     }
     
     private void createNetworks() {
@@ -82,6 +94,7 @@ public class DoubleDQN {
      * Predict Q-values using policy network
      */
     public NDArray predictQValues(NDManager localManager, float[] state) {
+        ensureInitialized();
         NDArray stateArray = localManager.create(state).reshape(1, INPUT_SIZE);
         return policyNetwork.getBlock().forward(
             new ai.djl.training.ParameterStore(localManager, false),
@@ -94,6 +107,7 @@ public class DoubleDQN {
      * Get target Q-values using target network
      */
     public NDArray getTargetQValues(NDManager localManager, float[] state) {
+        ensureInitialized();
         NDArray stateArray = localManager.create(state).reshape(1, INPUT_SIZE);
         return targetNetwork.getBlock().forward(
             new ai.djl.training.ParameterStore(localManager, false),
