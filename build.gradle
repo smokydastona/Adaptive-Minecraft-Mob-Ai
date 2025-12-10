@@ -104,25 +104,30 @@ dependencies {
 }
 
 tasks.named('jar', Jar).configure {
+    // Disable regular jar - we only want the jarJar version with bundled libraries
+    enabled = false
+}
+
+// Configure jarJar to be the primary output
+tasks.named('jarJar').configure {
+    archiveBaseName = 'Adaptive-Mob-Ai'
+    
     manifest {
         attributes([
                 'Specification-Title'     : 'Minecraft GAN City Generator',
                 'Specification-Vendor'    : 'GAN City Team',
                 'Specification-Version'   : '1',
-                'Implementation-Title'    : project.name,
-                'Implementation-Version'  : project.jar.archiveVersion,
+                'Implementation-Title'    : 'Adaptive-Mob-Ai',
+                'Implementation-Version'  : project.version,
                 'Implementation-Vendor'   : 'GAN City Team',
                 'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
         ])
     }
-
-    jarJar.enable()
-    finalizedBy 'reobfJar'
 }
 
-// Rename the -all.jar produced by jarJar
-tasks.named('jarJar').configure {
-    archiveBaseName = 'Adaptive-Mob-Ai'
+// Make reobfJar use jarJar output
+tasks.named('reobfJar').configure {
+    dependsOn 'jarJar'
 }
 
 publishing {
