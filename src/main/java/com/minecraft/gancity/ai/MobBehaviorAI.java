@@ -42,6 +42,10 @@ public class MobBehaviorAI {
     // CRITICAL: Performance optimizer (prevents lag with 70+ learning mobs)
     private PerformanceOptimizer performanceOptimizer;
     
+    // Cross-mob emergent learning settings
+    private boolean crossMobLearningEnabled = false;
+    private float crossMobRewardMultiplier = 3.0f;
+    
     private boolean mlEnabled = false;
     private final Map<String, MobBehaviorProfile> behaviorProfiles = new HashMap<>();
     private final Map<String, MobState> lastStateCache = new HashMap<>();
@@ -184,6 +188,21 @@ public class MobBehaviorAI {
      */
     public void setDifficultyMultiplier(float multiplier) {
         this.difficultyMultiplier = Math.max(0.1f, Math.min(5.0f, multiplier));
+    }
+    
+    /**
+     * Configure cross-mob emergent learning
+     */
+    public void setCrossMobLearning(boolean enabled, float rewardMultiplier) {
+        this.crossMobLearningEnabled = enabled;
+        this.crossMobRewardMultiplier = Math.max(1.0f, Math.min(10.0f, rewardMultiplier));
+        
+        if (enabled) {
+            LOGGER.info("Cross-Mob Emergent Learning: ENABLED ({}x reward for borrowed tactics)", 
+                this.crossMobRewardMultiplier);
+        } else {
+            LOGGER.info("Cross-Mob Emergent Learning: DISABLED");
+        }
     }
 
     /**
@@ -896,11 +915,30 @@ public class MobBehaviorAI {
     
     /**
      * Get list of valid actions for current state
+     * REVOLUTIONARY: Includes borrowed tactics from other mob types if cross-mob learning enabled
      */
     private List<String> getValidActions(MobBehaviorProfile profile, MobState state) {
-        List<String> actions = profile.getActions();
-        List<String> validActions = new ArrayList<>();
+        List<String> actions = new ArrayList<>(profile.getActions());
         
+        // EMERGENT LEARNING: Add successful tactics from other mob types
+        if (crossMobLearningEnabled && federatedLearning != null) {
+            List<FederatedLearning.GlobalTactic> bestGlobalTactics = federatedLearning.getBestGlobalTactics(20);
+            
+            for (FederatedLearning.GlobalTactic tactic : bestGlobalTactics) {
+                // Only borrow high-performing tactics (reward > 2.0)
+                if (tactic.avgReward > 2.0f && !actions.contains(tactic.action)) {
+                    // Check if this mob can physically perform the borrowed action
+                    if (canMobPerformAction(profile.getMobType(), tactic.action, state)) {
+                        actions.add(tactic.action);
+                        LOGGER.debug("{} borrowed '{}' from {} (reward: {:.2f})",
+                            profile.getMobType(), tactic.action, tactic.originalMobType, tactic.avgReward);
+                    }
+                }
+            }
+        }
+        
+        // Filter to only valid actions for current state
+        List<String> validActions = new ArrayList<>();
         for (String action : actions) {
             if (isActionValid(action, state)) {
                 validActions.add(action);
@@ -1026,6 +1064,7 @@ public class MobBehaviorAI {
 
     /**
      * Record combat outcome to improve AI with all advanced ML systems
+     * ENHANCED: Applies massive reward multiplier for successful borrowed tactics
      */
     public void recordCombatOutcome(String mobId, boolean playerDied, boolean mobDied, MobState finalState, 
                                     float damageDealt, float damageTaken) {
@@ -1042,6 +1081,21 @@ public class MobBehaviorAI {
         // Calculate reward based on outcome
         float reward = calculateReward(initialState, finalState, playerDied, mobDied);
         reward += damageDealt * 0.5f - damageTaken * 0.3f;  // Fine-grained feedback
+        
+        // REVOLUTIONARY: Huge bonus for successfully using borrowed tactics from other mob types
+        if (crossMobLearningEnabled && federatedLearning != null) {
+            String mobType = getMobTypeFromId(mobId);
+            if (mobType != null && !isMobsNativeAction(mobType, action)) {
+                // This mob used a tactic it borrowed from another species!
+                float originalReward = reward;
+                reward *= crossMobRewardMultiplier;
+                
+                if (reward > 0) {  // Only log successful borrowed tactics
+                    LOGGER.info("\u2605 EMERGENT BEHAVIOR: {} successfully used borrowed '{}' (reward: {:.1f} -> {:.1f})",
+                        mobType, action, originalReward, reward);
+                }
+            }
+        }
         
         // CRITICAL FIX #1: Use background training (never blocks main thread)
         if (mlEnabled && performanceOptimizer != null) {
@@ -1257,6 +1311,112 @@ public class MobBehaviorAI {
     public ModelPersistence getModelPersistence() {
         return modelPersistence;
     }
+    
+    // ==================== Cross-Mob Learning Helper Methods ====================
+    
+    /**
+     * Check if a mob can physically perform a borrowed action from another species
+     * CRITICAL: Prevents impossible scenarios (zombies flying, etc.)
+     */
+    private boolean canMobPerformAction(String mobType, String action, MobState state) {
+        mobType = mobType.toLowerCase();
+        
+        // Flying/aerial actions - only for flying mobs
+        if (action.contains("fly") || action.contains("aerial") || action.contains("swoop") || 
+            action.contains("dive_bomb") || action.contains("hover")) {
+            return mobType.contains("phantom") || mobType.contains("ghast") || 
+                   mobType.contains("blaze") || mobType.contains("wither") || 
+                   mobType.contains("ender_dragon") || mobType.contains("vex");
+        }
+        
+        // Wall climbing - only spiders and specific mobs
+        if (action.contains("wall_climb") || action.contains("ceiling_drop")) {
+            return state.canClimbWalls || mobType.contains("spider");
+        }
+        
+        // Ranged attacks - mobs need to have projectile capability
+        if (action.contains("arrow") || action.contains("shoot") || action.contains("strafe_shoot") ||
+            action.contains("kite_backward") || action.contains("retreat_reload")) {
+            return mobType.contains("skeleton") || mobType.contains("pillager") || 
+                   mobType.contains("piglin") || mobType.contains("illusioner") ||
+                   mobType.contains("witch") || mobType.contains("drowned") ||
+                   mobType.contains("blaze") || mobType.contains("ghast") ||
+                   mobType.contains("snow_golem") || mobType.contains("llama");
+        }
+        
+        // Teleportation - only enderman and shulker
+        if (action.contains("teleport")) {
+            return mobType.contains("enderman") || mobType.contains("shulker");
+        }
+        
+        // Swimming/aquatic - avoid for non-aquatic mobs
+        if (action.contains("underwater") || action.contains("swim")) {
+            return !mobType.contains("blaze") && !mobType.contains("magma_cube") &&
+                   !mobType.contains("strider") && !mobType.contains("enderman");
+        }
+        
+        // Explosion - only creepers and special mobs
+        if (action.contains("explosion") || action.contains("suicide_rush")) {
+            return mobType.contains("creeper") || mobType.contains("wither") ||
+                   mobType.contains("ender_dragon");
+        }
+        
+        // Pack/swarm tactics - allow for most hostile mobs
+        if (action.contains("pack") || action.contains("swarm") || action.contains("coordinated") ||
+            action.contains("group_rush")) {
+            return state.nearbyAlliesCount > 0;  // Need allies present
+        }
+        
+        // Melee actions - almost all mobs can attempt these
+        if (action.contains("charge") || action.contains("rush") || action.contains("melee") ||
+            action.contains("circle_strafe") || action.contains("straight_charge") ||
+            action.contains("ambush") || action.contains("retreat")) {
+            return true;  // Universal capabilities
+        }
+        
+        // High ground tactics - allow if not restricted by movement
+        if (action.contains("high_ground") || action.contains("height")) {
+            return !mobType.contains("slime") && !mobType.contains("magma_cube");
+        }
+        
+        // Default: allow most tactical decisions
+        return true;
+    }
+    
+    /**
+     * Check if an action is native to a mob type (not borrowed)
+     */
+    private boolean isMobsNativeAction(String mobType, String action) {
+        MobBehaviorProfile profile = behaviorProfiles.get(mobType.toLowerCase());
+        return profile != null && profile.getActions().contains(action);
+    }
+    
+    /**
+     * Extract mob type from mob ID (format: "mobType_uuid" or just "uuid")
+     */
+    private String getMobTypeFromId(String mobId) {
+        if (mobId == null) return null;
+        
+        // Try to extract from cached state first
+        for (Map.Entry<String, MobState> entry : lastStateCache.entrySet()) {
+            if (entry.getKey().equals(mobId)) {
+                // Try to match against known profiles
+                for (String mobType : behaviorProfiles.keySet()) {
+                    if (mobId.toLowerCase().startsWith(mobType)) {
+                        return mobType;
+                    }
+                }
+            }
+        }
+        
+        // Fallback: try to parse from ID format
+        String[] parts = mobId.split("_");
+        if (parts.length > 0 && behaviorProfiles.containsKey(parts[0].toLowerCase())) {
+            return parts[0].toLowerCase();
+        }
+        
+        return null;
+    }
 
     /**
      * Represents the current state of a mob during combat
@@ -1323,6 +1483,10 @@ public class MobBehaviorAI {
 
         public List<String> getActions() {
             return new ArrayList<>(actions);
+        }
+        
+        public String getMobType() {
+            return mobType;
         }
 
         public float getAggressionLevel() {

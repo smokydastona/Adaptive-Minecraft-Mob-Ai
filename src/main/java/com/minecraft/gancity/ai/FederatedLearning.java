@@ -50,6 +50,9 @@ public class FederatedLearning {
     // Local aggregation before submission
     private final Map<String, TacticSubmission> pendingSubmissions = new ConcurrentHashMap<>();
     
+    // Global tactic pool - tactics learned by ALL mob types worldwide
+    private final Map<String, Map<String, GlobalTactic>> globalTacticPool = new ConcurrentHashMap<>();
+    
     // Statistics
     private long totalDataPointsContributed = 0;
     private long totalDataPointsDownloaded = 0;
@@ -182,12 +185,15 @@ public class FederatedLearning {
     
     /**
      * Apply downloaded global tactics to local AI systems
+     * REVOLUTIONARY: Makes tactics from ALL mob types available for cross-species learning
      */
     @SuppressWarnings("unchecked")
     private void applyGlobalTactics(Map<String, Object> tacticsData) {
         try {
             Map<String, Object> tactics = (Map<String, Object>) tacticsData.get("tactics");
             if (tactics == null) return;
+            
+            int totalTacticsLoaded = 0;
             
             for (Map.Entry<String, Object> entry : tactics.entrySet()) {
                 String mobType = entry.getKey();
@@ -197,8 +203,31 @@ public class FederatedLearning {
                 if (tacticList != null && !tacticList.isEmpty()) {
                     LOGGER.debug("Received {} global tactics for {}", tacticList.size(), mobType);
                     
-                    // TODO: Integrate with MobBehaviorAI to influence action selection
-                    // For now, just log the best performing tactics
+                    // Store tactics in global pool for cross-mob learning
+                    Map<String, GlobalTactic> mobTactics = globalTacticPool.computeIfAbsent(
+                        mobType, k -> new ConcurrentHashMap<>());
+                    
+                    for (Map<String, Object> tacticData : tacticList) {
+                        String action = (String) tacticData.get("action");
+                        Object avgRewardObj = tacticData.get("avgReward");
+                        
+                        float avgReward = 0.0f;
+                        if (avgRewardObj instanceof Number) {
+                            avgReward = ((Number) avgRewardObj).floatValue();
+                        }
+                        
+                        GlobalTactic tactic = new GlobalTactic(
+                            mobType, 
+                            action, 
+                            avgReward,
+                            System.currentTimeMillis()
+                        );
+                        
+                        mobTactics.put(action, tactic);
+                        totalTacticsLoaded++;
+                    }
+                    
+                    // Log best performing tactics
                     for (int i = 0; i < Math.min(3, tacticList.size()); i++) {
                         Map<String, Object> tactic = tacticList.get(i);
                         LOGGER.info("Top {} tactic: {} (avg reward: {})", 
@@ -207,9 +236,37 @@ public class FederatedLearning {
                 }
             }
             
+            if (totalTacticsLoaded > 0) {
+                LOGGER.info("✓ Loaded {} global tactics from {} mob types into cross-species pool", 
+                    totalTacticsLoaded, globalTacticPool.size());
+            }
+            
         } catch (Exception e) {
             LOGGER.error("Error applying global tactics: {}", e.getMessage());
         }
+    }
+    
+    /**
+     * Get all global tactics (for cross-mob learning)
+     */
+    public Map<String, Map<String, GlobalTactic>> getGlobalTacticPool() {
+        return new HashMap<>(globalTacticPool);
+    }
+    
+    /**
+     * Get best global tactics regardless of mob type (for emergent learning)
+     */
+    public List<GlobalTactic> getBestGlobalTactics(int limit) {
+        List<GlobalTactic> allTactics = new ArrayList<>();
+        
+        for (Map<String, GlobalTactic> mobTactics : globalTacticPool.values()) {
+            allTactics.addAll(mobTactics.values());
+        }
+        
+        // Sort by average reward (descending)
+        allTactics.sort((a, b) -> Float.compare(b.avgReward, a.avgReward));
+        
+        return allTactics.subList(0, Math.min(limit, allTactics.size()));
     }
     
     /**
@@ -420,6 +477,29 @@ public class FederatedLearning {
         
         public float getSuccessRate() {
             return totalCount > 0 ? (float) successCount / totalCount : 0.5f;
+        }
+    }
+    
+    /**
+     * Global tactic learned by the collective AI across all servers
+     * Available for cross-mob emergent learning
+     */
+    public static class GlobalTactic {
+        public final String originalMobType;  // Which mob type originally learned this
+        public final String action;
+        public final float avgReward;
+        public final long timestamp;
+        
+        public GlobalTactic(String originalMobType, String action, float avgReward, long timestamp) {
+            this.originalMobType = originalMobType;
+            this.action = action;
+            this.avgReward = avgReward;
+            this.timestamp = timestamp;
+        }
+        
+        @Override
+        public String toString() {
+            return String.format("%s's %s (reward: %.2f)", originalMobType, action, avgReward);
         }
     }
 }

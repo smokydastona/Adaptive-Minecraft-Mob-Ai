@@ -147,6 +147,19 @@ public class GANCityMod {
                 if (mobBehaviorAI == null) {
                     LOGGER.info("Lazy-initializing MobBehaviorAI...");
                     mobBehaviorAI = new MobBehaviorAI();
+                    
+                    // Load cross-mob learning configuration (default enabled)
+                    try {
+                        // Default: cross-mob learning enabled with 3x reward multiplier
+                        boolean crossMobEnabled = true;
+                        float crossMobMultiplier = 3.0f;
+                        mobBehaviorAI.setCrossMobLearning(crossMobEnabled, crossMobMultiplier);
+                        
+                        LOGGER.info("✓ Cross-Mob Emergent Learning ENABLED - Mobs can learn tactics from any species!");
+                        LOGGER.info("  Reward multiplier for borrowed tactics: {}x", crossMobMultiplier);
+                    } catch (Exception e) {
+                        LOGGER.warn("Could not enable cross-mob learning: {}", e.getMessage());
+                    }
                 }
             }
         }

@@ -53,6 +53,16 @@
 	
 	#Enable experimental features
 	experimentalFeatures = false
+	
+	#REVOLUTIONARY: Enable cross-mob emergent learning
+	#Mobs can learn tactics from ANY species (e.g., zombies learning skeleton tactics)
+	#Creates unpredictable, emergent AI behavior never designed by developers
+	enableCrossMobLearning = true
+	
+	#Reward multiplier for successfully using borrowed tactics from other mob types
+	#Higher values = faster cross-species learning
+	#Range: 1.0 ~ 10.0
+	crossMobRewardMultiplier = 3.0
 
 [federated_learning]
 	#Enable federated learning (share AI knowledge across ALL servers globally)
