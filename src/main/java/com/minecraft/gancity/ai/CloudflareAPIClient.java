@@ -115,34 +115,80 @@ public class CloudflareAPIClient {
     }
     
     /**
-     * Download global tactics from all servers (blocking)
+     * Download global tactics from GitHub repository (blocking)
+     * Downloads from: https://github.com/smokydastona/Minecraft-machine-learned-collected
      * 
      * @return Map of mob types to tactic data, or empty map if failed
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> downloadTactics() {
         try {
-            String response = sendGetRequest("api/download-tactics");
+            // Download directly from GitHub raw content
+            String[] mobTypes = {"zombie", "skeleton", "creeper", "spider", "husk", "stray", "wither_skeleton", "enderman"};
+            Map<String, Object> tacticsData = new java.util.HashMap<>();
+            tacticsData.put("version", "1.0.0");
+            tacticsData.put("timestamp", System.currentTimeMillis());
             
-            if (response != null) {
+            Map<String, Object> tactics = new java.util.HashMap<>();
+            
+            for (String mobType : mobTypes) {
+                String githubUrl = "https://raw.githubusercontent.com/smokydastona/Minecraft-machine-learned-collected/main/federated-data/" 
+                    + mobType + "-tactics.json";
+                
+                try {
+                    String mobData = downloadFromGitHub(githubUrl);
+                    if (mobData != null) {
+                        Map<String, Object> mobTactics = gson.fromJson(mobData, Map.class);
+                        tactics.put(mobType, mobTactics);
+                    }
+                } catch (Exception e) {
+                    LOGGER.debug("No tactics found for {} on GitHub: {}", mobType, e.getMessage());
+                }
+            }
+            
+            tacticsData.put("tactics", tactics);
+            
+            if (!tactics.isEmpty()) {
                 totalDownloads++;
                 lastSuccessfulSync = System.currentTimeMillis();
-                
-                // Parse JSON response
-                Map<String, Object> data = gson.fromJson(response, Map.class);
-                LOGGER.info("Downloaded global tactics - Version: {}", data.get("version"));
-                
-                return data;
+                LOGGER.info("Downloaded global tactics from GitHub - {} mob types", tactics.size());
+                return tacticsData;
             } else {
                 failedDownloads++;
+                LOGGER.warn("No tactics data available on GitHub yet");
                 return Map.of();
             }
             
         } catch (Exception e) {
             failedDownloads++;
-            LOGGER.warn("Failed to download tactics: {}", e.getMessage());
+            LOGGER.warn("Failed to download tactics from GitHub: {}", e.getMessage());
             return Map.of();
         }
+    }
+    
+    /**
+     * Download raw JSON from GitHub
+     */
+    private String downloadFromGitHub(String url) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        conn.setRequestMethod("GET");
+        conn.setRequestProperty("User-Agent", "MCA-AI-Enhanced/1.0");
+        conn.setConnectTimeout(connectTimeoutMs);
+        conn.setReadTimeout(readTimeoutMs);
+        
+        int responseCode = conn.getResponseCode();
+        if (responseCode == HttpURLConnection.HTTP_OK) {
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) {
+                    response.append(line);
+                }
+                return response.toString();
+            }
+        }
+        return null;
     }
     
     /**
