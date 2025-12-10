@@ -103,14 +103,17 @@ dependencies {
     implementation 'ai.djl.huggingface:tokenizers:0.25.0'
 }
 
+// Configure the regular jar task with the new name
 tasks.named('jar', Jar).configure {
-    // Disable regular jar - we only want the jarJar version with bundled libraries
-    enabled = false
+    archiveBaseName = 'Adaptive-Mob-Ai'
 }
 
-// Configure jarJar to be the primary output
+// Configure jarJar to be the final output with bundled libraries
 tasks.named('jarJar').configure {
     archiveBaseName = 'Adaptive-Mob-Ai'
+    
+    // Enable jarJar to actually bundle the dependencies
+    jarJar.enable()
     
     manifest {
         attributes([
@@ -123,6 +126,11 @@ tasks.named('jarJar').configure {
                 'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
         ])
     }
+}
+
+// Make build task depend on jarJar to ensure it's created
+tasks.named('build').configure {
+    dependsOn 'jarJar'
 }
 
 publishing {
