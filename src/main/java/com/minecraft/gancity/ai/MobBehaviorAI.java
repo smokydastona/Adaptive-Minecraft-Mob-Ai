@@ -1191,6 +1191,10 @@ public class MobBehaviorAI {
 
     /**
      * Calculate weight for an action based on current state
+     * Tier difficulty multiplier affects the "smartness" of tactical choices:
+     * - ELITE (2.0x): Makes better tactical decisions (doubled weight for smart moves)
+     * - VETERAN (1.0x): Baseline tactical intelligence
+     * - ROOKIE (0.5x): Makes worse tactical decisions (halved weight for smart moves)
      */
     private float calculateActionWeight(String action, MobState state, MobBehaviorProfile profile) {
         float baseWeight = 1.0f;
@@ -1224,6 +1228,10 @@ public class MobBehaviorAI {
         
         // Factor in past success rate
         baseWeight *= profile.getActionSuccessRate(action);
+        
+        // Apply tier difficulty multiplier to make elite mobs smarter, rookies dumber
+        // Elite mobs make better tactical choices, rookies make worse ones
+        baseWeight *= difficultyMultiplier;
         
         return baseWeight;
     }
