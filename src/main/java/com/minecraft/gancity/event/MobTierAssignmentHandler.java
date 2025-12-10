@@ -180,11 +180,13 @@ public class MobTierAssignmentHandler {
     /**
      * AI Goal that makes elite mobs coordinate with nearby allies
      * Elite mobs will stick together and focus fire on targets
+     * Player-aware: packs form around the closest player target
      */
     static class ElitePackCoordinationGoal extends Goal {
         private final Mob mob;
         private Mob packLeader;
         private LivingEntity sharedTarget;
+        private Player targetPlayer; // Track which player this pack is focused on
         private int coordinationCooldown = 0;
         
         public ElitePackCoordinationGoal(Mob mob) {
@@ -200,29 +202,64 @@ public class MobTierAssignmentHandler {
             }
             coordinationCooldown = 20;
             
-            // Find nearby elite allies within 16 blocks
+            // First, determine our current target player (if any)
+            LivingEntity currentTarget = mob.getTarget();
+            Player focusPlayer = null;
+            
+            if (currentTarget instanceof Player) {
+                focusPlayer = (Player) currentTarget;
+            } else {
+                // If we don't have a player target, find the nearest player
+                focusPlayer = mob.level().getNearestPlayer(mob, 16.0);
+            }
+            
+            // If no player nearby, don't coordinate
+            if (focusPlayer == null) {
+                return false;
+            }
+            
+            final Player finalFocusPlayer = focusPlayer;
+            
+            // Find nearby elite allies within 16 blocks that are also focused on the same player
+            // or don't have a target yet (can join our pack)
             List<Mob> nearbyAllies = mob.level().getEntitiesOfClass(
                 Mob.class,
                 mob.getBoundingBox().inflate(16.0),
-                ally -> ally != mob && 
-                        ally instanceof Enemy && 
-                        hasTier(ally) && 
-                        getTierFromMob(ally) == TacticTier.ELITE &&
-                        !ally.isDeadOrDying()
+                ally -> {
+                    if (ally == mob || !(ally instanceof Enemy) || !hasTier(ally) || 
+                        getTierFromMob(ally) != TacticTier.ELITE || ally.isDeadOrDying()) {
+                        return false;
+                    }
+                    
+                    // Only form pack with allies focused on same player or without target
+                    LivingEntity allyTarget = ally.getTarget();
+                    return allyTarget == null || 
+                           allyTarget == finalFocusPlayer ||
+                           (allyTarget instanceof Player && 
+                            ally.distanceToSqr(finalFocusPlayer) < ally.distanceToSqr(allyTarget));
+                }
             );
             
             if (nearbyAllies.isEmpty()) {
                 return false;
             }
             
-            // Find the strongest nearby elite as pack leader
+            // Find the strongest nearby elite as pack leader (must be targeting same player)
             packLeader = nearbyAllies.stream()
+                .filter(ally -> ally.getTarget() == finalFocusPlayer)
                 .max(Comparator.comparingDouble(Mob::getHealth))
                 .orElse(null);
             
+            // If no pack leader has the target yet, become the leader yourself
+            if (packLeader == null && mob.getTarget() == finalFocusPlayer) {
+                // Don't join a pack, let others follow us
+                return false;
+            }
+            
             // Share target with pack leader if they have one
-            if (packLeader != null && packLeader.getTarget() != null) {
+            if (packLeader != null && packLeader.getTarget() instanceof Player) {
                 sharedTarget = packLeader.getTarget();
+                targetPlayer = (Player) sharedTarget;
                 return true;
             }
             
@@ -231,30 +268,46 @@ public class MobTierAssignmentHandler {
         
         @Override
         public boolean canContinueToUse() {
+            // Stop coordinating if target player changed, died, or is too far
             return sharedTarget != null && 
                    sharedTarget.isAlive() && 
                    packLeader != null && 
                    packLeader.isAlive() &&
-                   mob.distanceToSqr(packLeader) < 256.0; // Within 16 blocks
+                   packLeader.getTarget() == sharedTarget && // Leader still targeting same player
+                   mob.distanceToSqr(packLeader) < 256.0 && // Within 16 blocks of leader
+                   mob.distanceToSqr(sharedTarget) < 576.0; // Within 24 blocks of target player
         }
         
         @Override
         public void start() {
             // Adopt pack leader's target for coordinated attack
-            if (sharedTarget != null && mob.getTarget() != sharedTarget) {
+            // Only if it's a player (prevent non-player target confusion)
+            if (sharedTarget instanceof Player && mob.getTarget() != sharedTarget) {
                 mob.setTarget(sharedTarget);
             }
         }
         
         @Override
         public void tick() {
+            // Verify we're still focused on the same player
+            if (targetPlayer != null && !targetPlayer.isAlive()) {
+                this.stop();
+                return;
+            }
+            
+            // If pack leader switched to a different player, break formation
+            if (packLeader != null && packLeader.getTarget() != sharedTarget) {
+                this.stop();
+                return;
+            }
+            
             // Stay near pack leader (within 8 blocks)
             if (packLeader != null && mob.distanceToSqr(packLeader) > 64.0) {
                 mob.getNavigation().moveTo(packLeader, 1.0);
             }
             
-            // Keep attacking shared target
-            if (sharedTarget != null && mob.getTarget() != sharedTarget) {
+            // Keep attacking shared target (only if still the same player)
+            if (sharedTarget instanceof Player && mob.getTarget() != sharedTarget) {
                 mob.setTarget(sharedTarget);
             }
         }
@@ -263,6 +316,7 @@ public class MobTierAssignmentHandler {
         public void stop() {
             packLeader = null;
             sharedTarget = null;
+            targetPlayer = null;
         }
     }
     
