@@ -1,5 +1,12 @@
 /**
- * Cloudflare Worker for MCA AI Enhanced - Multi-Stage AI Processing Pipeline
+ * Cloudflare Worker for MCA AI Enhanced - Federated Learning Server v1.3.0
+ * 
+ * FIXES in v1.3.0:
+ * - ✅ Success rate tracking (successRate, successCount, failureCount)
+ * - ✅ Timestamp storage (lastUpdate for each tactic)
+ * - ✅ Complete data model matching mod expectations
+ * - ✅ Proper outcome field handling ("success"/"failure")
+ * - ✅ Extended mob support (husk, stray, wither_skeleton, enderman)
  * 
  * Pipeline Architecture:
  * Stage 1: Aggregation (Cloudflare KV) - Collect tactics from all servers
@@ -9,8 +16,8 @@
  * Stage 5: Distribution (Back to Mod) - Send validated tactics to all servers
  * 
  * Endpoints:
- * - POST /api/submit-tactics - Submit learned tactics from game servers
- * - GET /api/download-tactics - Download multi-stage processed tactics
+ * - POST /api/submit-tactics - Submit learned tactics (mobType, action, reward, outcome, timestamp)
+ * - GET /api/download-tactics - Download aggregated tactics (includes successRate, lastUpdate)
  * - GET /api/analyze-tactics - Get AI-powered analysis of tactics
  * - GET /api/process-pipeline - Trigger full multi-stage processing
  * - GET /api/stats - View submission statistics
@@ -51,13 +58,13 @@ export default {
         return await handleStats(request, env, corsHeaders);
       } else if (url.pathname === '/' || url.pathname === '/api') {
         return new Response(JSON.stringify({
-          service: 'MCA AI Enhanced - Multi-Stage AI Processing',
-          version: '1.2.0',
+          service: 'MCA AI Enhanced - Federated Learning Server',
+          version: '1.3.0',
           pipeline: ['Aggregation', 'CF Workers AI', 'HuggingFace Validation', 'GitHub Storage', 'Distribution'],
-          features: ['Multi-Stage Processing', 'AI Cross-Validation', 'Pattern Analysis'],
+          features: ['Multi-Stage Processing', 'AI Cross-Validation', 'Pattern Analysis', 'Success Rate Tracking'],
           endpoints: {
-            'POST /api/submit-tactics': 'Submit learned tactics',
-            'GET /api/download-tactics': 'Download processed tactics',
+            'POST /api/submit-tactics': 'Submit learned tactics (mobType, action, reward, outcome, timestamp)',
+            'GET /api/download-tactics': 'Download processed tactics (includes successRate)',
             'GET /api/analyze-tactics': 'Get AI-powered analysis',
             'GET /api/process-pipeline': 'Trigger full pipeline processing',
             'GET /api/stats': 'View statistics'
@@ -98,7 +105,7 @@ async function handleSubmitTactics(request, env, corsHeaders) {
     }
     
     // Validate mob type
-    const validMobs = ['zombie', 'skeleton', 'creeper', 'spider'];
+    const validMobs = ['zombie', 'skeleton', 'creeper', 'spider', 'husk', 'stray', 'wither_skeleton', 'enderman'];
     if (!validMobs.includes(data.mobType)) {
       return new Response(JSON.stringify({ 
         error: `Invalid mobType. Must be one of: ${validMobs.join(', ')}` 
@@ -124,14 +131,35 @@ async function handleSubmitTactics(request, env, corsHeaders) {
         action: data.action,
         totalReward: 0,
         count: 0,
-        avgReward: 0
+        avgReward: 0,
+        successCount: 0,
+        failureCount: 0,
+        successRate: 0.0,
+        lastUpdate: data.timestamp || Date.now()
       };
     }
     
+    // Aggregate reward
     existing.tactics[tacticKey].totalReward += data.reward;
     existing.tactics[tacticKey].count += 1;
     existing.tactics[tacticKey].avgReward = 
       existing.tactics[tacticKey].totalReward / existing.tactics[tacticKey].count;
+    
+    // Track success/failure outcomes
+    if (data.outcome === 'success') {
+      existing.tactics[tacticKey].successCount += 1;
+    } else if (data.outcome === 'failure') {
+      existing.tactics[tacticKey].failureCount += 1;
+    }
+    
+    // Calculate success rate
+    const totalOutcomes = existing.tactics[tacticKey].successCount + existing.tactics[tacticKey].failureCount;
+    if (totalOutcomes > 0) {
+      existing.tactics[tacticKey].successRate = existing.tactics[tacticKey].successCount / totalOutcomes;
+    }
+    
+    // Update timestamp
+    existing.tactics[tacticKey].lastUpdate = data.timestamp || Date.now();
     
     existing.submissions += 1;
     existing.lastUpdate = Date.now();
@@ -152,7 +180,13 @@ async function handleSubmitTactics(request, env, corsHeaders) {
       success: true,
       mobType: data.mobType,
       totalSubmissions: existing.submissions,
-      message: 'Tactics received and aggregated'
+      message: 'Tactics received and aggregated',
+      tacticStats: {
+        action: data.action,
+        avgReward: existing.tactics[tacticKey].avgReward,
+        successRate: existing.tactics[tacticKey].successRate,
+        count: existing.tactics[tacticKey].count
+      }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
@@ -172,7 +206,7 @@ async function handleSubmitTactics(request, env, corsHeaders) {
  */
 async function handleDownloadTactics(request, env, corsHeaders) {
   try {
-    const mobTypes = ['zombie', 'skeleton', 'creeper', 'spider'];
+    const mobTypes = ['zombie', 'skeleton', 'creeper', 'spider', 'husk', 'stray', 'wither_skeleton', 'enderman'];
     const tactics = {};
     
     for (const mobType of mobTypes) {
@@ -187,7 +221,15 @@ async function handleDownloadTactics(request, env, corsHeaders) {
         tactics[mobType] = {
           submissions: data.submissions,
           lastUpdate: data.lastUpdate,
-          tactics: tacticArray.slice(0, 20) // Top 20 tactics
+          tactics: tacticArray.slice(0, 20).map(t => ({
+            action: t.action,
+            avgReward: t.avgReward,
+            count: t.count,
+            successRate: t.successRate || 0.0,
+            successCount: t.successCount || 0,
+            failureCount: t.failureCount || 0,
+            lastUpdate: t.lastUpdate
+          })) // Top 20 tactics with complete data
         };
       } else {
         tactics[mobType] = {
@@ -229,7 +271,7 @@ async function handleStats(request, env, corsHeaders) {
       startTime: Date.now()
     };
     
-    const mobTypes = ['zombie', 'skeleton', 'creeper', 'spider'];
+    const mobTypes = ['zombie', 'skeleton', 'creeper', 'spider', 'husk', 'stray', 'wither_skeleton', 'enderman'];
     const mobStats = {};
     
     for (const mobType of mobTypes) {
@@ -238,7 +280,10 @@ async function handleStats(request, env, corsHeaders) {
       mobStats[mobType] = {
         submissions: data?.submissions || 0,
         uniqueTactics: data ? Object.keys(data.tactics).length : 0,
-        lastUpdate: data?.lastUpdate || null
+        lastUpdate: data?.lastUpdate || null,
+        topTactic: data && Object.keys(data.tactics).length > 0 
+          ? Object.values(data.tactics).sort((a, b) => b.avgReward - a.avgReward)[0]
+          : null
       };
     }
     
@@ -295,7 +340,7 @@ async function handleAnalyzeTactics(request, env, corsHeaders) {
         
         // Build prompt for AI analysis
         const tacticSummary = tacticArray.map(t => 
-          `${t.action}: avg reward ${t.avgReward.toFixed(2)}, used ${t.count} times`
+          `${t.action}: avg reward ${t.avgReward.toFixed(2)} (${((t.successRate || 0) * 100).toFixed(1)}% success), used ${t.count} times`
         ).join('\n');
         
         const prompt = `Analyze these Minecraft mob tactics for ${mobType}s and provide strategic insights:
@@ -319,7 +364,12 @@ Keep response under 200 words.`;
         
         analyses[mobType] = {
           submissions: data.submissions,
-          topTactics: tacticArray.slice(0, 5),
+          topTactics: tacticArray.slice(0, 5).map(t => ({
+            action: t.action,
+            avgReward: t.avgReward,
+            successRate: t.successRate || 0.0,
+            count: t.count
+          })),
           aiInsights: aiResponse.response || 'Analysis unavailable'
         };
       } else {
@@ -387,7 +437,7 @@ async function handleProcessPipeline(request, env, corsHeaders) {
         // STAGE 2: Cloudflare Workers AI Analysis
         console.log(`Pipeline Stage 2: CF AI Analysis for ${mobType}`);
         const cfAIPrompt = `Analyze these Minecraft ${mobType} combat tactics:
-${tacticArray.map(t => `- ${t.action}: reward ${t.avgReward.toFixed(2)}, used ${t.count}x`).join('\n')}
+${tacticArray.map(t => `- ${t.action}: reward ${t.avgReward.toFixed(2)} (${((t.successRate || 0) * 100).toFixed(1)}% success), used ${t.count}x`).join('\n')}
 
 Provide a 2-sentence strategic recommendation.`;
         
@@ -409,7 +459,12 @@ Provide a 2-sentence strategic recommendation.`;
         
         // STAGE 4: Combine insights from both AI systems
         pipelineResults.finalRecommendations[mobType] = {
-          topTactics: tacticArray,
+          topTactics: tacticArray.map(t => ({
+            action: t.action,
+            avgReward: t.avgReward,
+            successRate: t.successRate || 0.0,
+            count: t.count
+          })),
           cloudflareAI: cfAIResult.response || 'No analysis',
           huggingFaceValidation: hfValidation,
           confidence: calculateConfidence(cfAIResult.response, hfValidation),
