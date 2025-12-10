@@ -7,14 +7,21 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.*;
+import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.slf4j.Logger;
 
+import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -113,6 +120,9 @@ public class MobTierAssignmentHandler {
             mob.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED)
                 .setBaseValue(newSpeed);
             
+            // Elite mobs form teams - add pack coordination AI
+            addEliteTeamBehavior(mob);
+            
             // Visual indicator handled by particle effects (no glow)
         }
         // Rookie mobs are weaker
@@ -156,6 +166,104 @@ public class MobTierAssignmentHandler {
         }
         
         return TacticTier.VETERAN; // default
+    }
+    
+    /**
+     * Add team coordination behavior to elite mobs
+     * Elite mobs will follow nearby allies and coordinate attacks
+     */
+    private static void addEliteTeamBehavior(Mob mob) {
+        // Add pack coordination goal (priority 2 - high priority)
+        mob.goalSelector.addGoal(2, new ElitePackCoordinationGoal(mob));
+    }
+    
+    /**
+     * AI Goal that makes elite mobs coordinate with nearby allies
+     * Elite mobs will stick together and focus fire on targets
+     */
+    static class ElitePackCoordinationGoal extends Goal {
+        private final Mob mob;
+        private Mob packLeader;
+        private LivingEntity sharedTarget;
+        private int coordinationCooldown = 0;
+        
+        public ElitePackCoordinationGoal(Mob mob) {
+            this.mob = mob;
+            this.setFlags(EnumSet.of(Flag.MOVE, Flag.TARGET));
+        }
+        
+        @Override
+        public boolean canUse() {
+            // Only coordinate every 20 ticks (1 second) for performance
+            if (coordinationCooldown-- > 0) {
+                return false;
+            }
+            coordinationCooldown = 20;
+            
+            // Find nearby elite allies within 16 blocks
+            List<Mob> nearbyAllies = mob.level().getEntitiesOfClass(
+                Mob.class,
+                mob.getBoundingBox().inflate(16.0),
+                ally -> ally != mob && 
+                        ally instanceof Enemy && 
+                        hasTier(ally) && 
+                        getTierFromMob(ally) == TacticTier.ELITE &&
+                        !ally.isDeadOrDying()
+            );
+            
+            if (nearbyAllies.isEmpty()) {
+                return false;
+            }
+            
+            // Find the strongest nearby elite as pack leader
+            packLeader = nearbyAllies.stream()
+                .max(Comparator.comparingDouble(Mob::getHealth))
+                .orElse(null);
+            
+            // Share target with pack leader if they have one
+            if (packLeader != null && packLeader.getTarget() != null) {
+                sharedTarget = packLeader.getTarget();
+                return true;
+            }
+            
+            return false;
+        }
+        
+        @Override
+        public boolean canContinueToUse() {
+            return sharedTarget != null && 
+                   sharedTarget.isAlive() && 
+                   packLeader != null && 
+                   packLeader.isAlive() &&
+                   mob.distanceToSqr(packLeader) < 256.0; // Within 16 blocks
+        }
+        
+        @Override
+        public void start() {
+            // Adopt pack leader's target for coordinated attack
+            if (sharedTarget != null && mob.getTarget() != sharedTarget) {
+                mob.setTarget(sharedTarget);
+            }
+        }
+        
+        @Override
+        public void tick() {
+            // Stay near pack leader (within 8 blocks)
+            if (packLeader != null && mob.distanceToSqr(packLeader) > 64.0) {
+                mob.getNavigation().moveTo(packLeader, 1.0);
+            }
+            
+            // Keep attacking shared target
+            if (sharedTarget != null && mob.getTarget() != sharedTarget) {
+                mob.setTarget(sharedTarget);
+            }
+        }
+        
+        @Override
+        public void stop() {
+            packLeader = null;
+            sharedTarget = null;
+        }
     }
     
     /**
