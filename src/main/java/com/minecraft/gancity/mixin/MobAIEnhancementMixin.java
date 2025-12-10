@@ -25,21 +25,31 @@ public abstract class MobAIEnhancementMixin {
      * Inject AI-enhanced behavior when mob registers goals
      * Now applies to ALL mobs, not just monsters - passive mobs learn evasion
      * MCA ENHANCED: MCA villagers get unique persistent tactical profiles
+     * VANILLA ENHANCED: Vanilla villagers also get persistent profiles!
      */
     @Inject(method = "registerGoals", at = @At("TAIL"))
     private void onRegisterGoals(CallbackInfo ci) {
         Mob mob = (Mob)(Object)this;
         
-        // MCA INTEGRATION: MCA villagers get ATTACK TACTICS but not environmental
+        // Check if this is ANY villager (MCA or vanilla)
         String className = mob.getClass().getName();
         boolean isMCAVillager = className.contains("mca.entity.VillagerEntityMCA") || 
                                 className.contains("mca.entity.ai");
+        boolean isVanillaVillager = mob instanceof net.minecraft.world.entity.npc.Villager;
         
         if (isMCAVillager) {
             // MCA villagers get unique combat AI (for guards, self-defense)
             // Lower priority (6) to not override MCA's core behavior
             // enableEnvironmental = false (no block breaking/pillaring)
             mob.goalSelector.addGoal(6, new AIEnhancedMeleeGoal(mob, 1.0, false, false, true));
+            return;
+        }
+        
+        if (isVanillaVillager) {
+            // Vanilla villagers ALSO get persistent profiles! (works without MCA)
+            // Priority 7 to not override vanilla profession behavior
+            // enableEnvironmental = false (villagers don't break blocks)
+            mob.goalSelector.addGoal(7, new AIEnhancedMeleeGoal(mob, 1.0, false, false, true));
             return;
         }
         
@@ -57,43 +67,44 @@ public abstract class MobAIEnhancementMixin {
     /**
      * AI-Enhanced Melee Attack Goal
      * Uses machine learning to select attack patterns
-     * MCA SUPPORT: Persistent individual profiles for villagers
+     * VILLAGER SUPPORT: Persistent individual profiles for MCA AND vanilla villagers
      */
     private static class AIEnhancedMeleeGoal extends Goal {
         private final Mob mob;
         private final double speedModifier;
         private final boolean followingTargetEvenIfNotSeen;
         private final boolean enableEnvironmentalTactics;  // Block breaking, pillaring, etc.
-        private final boolean isMCAVillager;  // Persistent profile support
+        private final boolean isVillager;  // Persistent profile support (MCA or vanilla)
         private LivingEntity target;
         private int ticksUntilNextAction;
         private String currentAction = "straight_charge";
         private final MobBehaviorAI behaviorAI;
         private final String mobId;  // Unique ID for this mob instance
-        private String persistentProfile = null;  // MCA villager's permanent tactical profile
+        private String persistentProfile = null;  // Villager's permanent tactical profile (MCA or vanilla)
         private float initialMobHealth;
         private float initialTargetHealth;
         private int combatTicks = 0;
         
         public AIEnhancedMeleeGoal(Mob mob, double speedModifier, boolean followEvenIfNotSeen, 
-                                   boolean enableEnvironmental, boolean isMCA) {
+                                   boolean enableEnvironmental, boolean isVillager) {
             this.mob = mob;
             this.speedModifier = speedModifier;
             this.followingTargetEvenIfNotSeen = followEvenIfNotSeen;
             this.enableEnvironmentalTactics = enableEnvironmental;
-            this.isMCAVillager = isMCA;
+            this.isVillager = isVillager;
             this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
             this.behaviorAI = GANCityMod.getMobBehaviorAI();
             this.mobId = mob.getUUID().toString();
             
-            // MCA VILLAGERS: Assign permanent tactical profile on creation
-            if (isMCA) {
+            // VILLAGERS: Assign permanent tactical profile on creation (MCA or vanilla)
+            if (isVillager) {
                 this.persistentProfile = loadOrCreatePersistentProfile();
             }
         }
         
         /**
-         * Load or create a permanent tactical profile for this MCA villager
+         * Load or create a permanent tactical profile for this villager
+         * Works for BOTH MCA and vanilla villagers!
          * Profile stored in mob's persistent data, survives restarts/updates
          */
         private String loadOrCreatePersistentProfile() {
@@ -213,7 +224,7 @@ public abstract class MobAIEnhancementMixin {
         
         /**
          * Select next action using AI with mob instance tracking
-         * MCA VILLAGERS: Use persistent profile for consistent behavior
+         * VILLAGERS: Use persistent profile for consistent behavior (MCA or vanilla)
          */
         private void selectNextAction() {
             if (target == null) return;
@@ -236,8 +247,8 @@ public abstract class MobAIEnhancementMixin {
             
             // Get mob type
             String mobType;
-            if (isMCAVillager && persistentProfile != null) {
-                // MCA villagers use their permanent tactical profile
+            if (isVillager && persistentProfile != null) {
+                // Villagers (MCA or vanilla) use their permanent tactical profile
                 mobType = persistentProfile;
             } else {
                 // Regular mobs use class-based type
