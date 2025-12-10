@@ -137,12 +137,16 @@ public class PerformanceOptimizer {
             return new float[10];  // Fallback
         }
         
-        float[] qValues = globalModel.predict(state);
-        
-        // Cache for future use
-        predictionCache.put(mobId, new CachedPrediction(qValues, currentTick.get()));
-        
-        return qValues;
+        // Use temporary manager for prediction
+        try (ai.djl.ndarray.NDManager localManager = ai.djl.ndarray.NDManager.newBaseManager()) {
+            ai.djl.ndarray.NDArray qValuesArray = globalModel.predictQValues(localManager, state);
+            float[] qValues = qValuesArray.toFloatArray();
+            
+            // Cache for future use
+            predictionCache.put(mobId, new CachedPrediction(qValues, currentTick.get()));
+            
+            return qValues;
+        }
     }
     
     /**
@@ -201,11 +205,11 @@ public class PerformanceOptimizer {
         }
         
         // Convert to format expected by Double DQN
-        DoubleDQN.Experience[] experiences = batch.stream()
-            .map(exp -> new DoubleDQN.Experience(
+        java.util.List<com.minecraft.gancity.ml.PrioritizedReplayBuffer.Experience> experiences = batch.stream()
+            .map(exp -> new com.minecraft.gancity.ml.PrioritizedReplayBuffer.Experience(
                 exp.state, exp.action, exp.reward, exp.nextState, exp.done
             ))
-            .toArray(DoubleDQN.Experience[]::new);
+            .collect(java.util.stream.Collectors.toList());
         
         // CRITICAL: This runs on background thread, not game thread
         globalModel.trainBatch(experiences);
