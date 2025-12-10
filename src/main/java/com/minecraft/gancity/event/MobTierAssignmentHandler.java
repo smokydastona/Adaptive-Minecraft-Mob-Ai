@@ -114,8 +114,8 @@ public class MobTierAssignmentHandler {
             mob.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED)
                 .setBaseValue(newSpeed);
             
-            // Subtle visual indicator - persistent glowing effect
-            mob.setGlowingTag(false); // Don't make them glow (too obvious)
+            // Visual indicator - subtle red glow
+            mob.setGlowingTag(true);
         }
         // Rookie mobs are weaker
         else if (tier == TacticTier.ROOKIE) {
@@ -129,17 +129,20 @@ public class MobTierAssignmentHandler {
             float newSpeed = originalSpeed * 0.9f;
             mob.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED)
                 .setBaseValue(newSpeed);
+            
+            // No visual indicator for rookies (makes them blend in)
         }
         // Veteran mobs keep default stats
         
         // Log speed modifier (if changed)
         float finalSpeed = (float) mob.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED).getBaseValue();
         if (Math.abs(finalSpeed - originalSpeed) > 0.001f) {
-            LOGGER.info("[Tier System] Speed modifier applied: {} -> {} ({}{:.1f}%)",
+            float percentChange = (finalSpeed / originalSpeed - 1.0f) * 100.0f;
+            LOGGER.info("[Tier System] Speed modifier applied: {} -> {} ({}{}%)",
                     String.format("%.3f", originalSpeed),
                     String.format("%.3f", finalSpeed),
                     finalSpeed > originalSpeed ? "+" : "",
-                    ((finalSpeed / originalSpeed - 1.0f) * 100.0f));
+                    String.format("%.1f", percentChange));
         }
     }
     
