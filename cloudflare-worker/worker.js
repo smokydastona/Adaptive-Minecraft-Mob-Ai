@@ -601,7 +601,7 @@ async function syncToGitHub(env, mobType, tacticsData) {
 
   try {
     const owner = 'smokydastona';
-    const repo = 'Adaptive-Minecraft-Mob-Ai';
+    const repo = 'Minecraft-machine-learned-collected';
     const branch = 'main';
     const path = `federated-data/${mobType}-tactics.json`;
     

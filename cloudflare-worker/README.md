@@ -110,7 +110,7 @@ wrangler secret put GITHUB_TOKEN
 ```
 
 The worker will now automatically backup tactics to:
-`https://github.com/smokydastona/Adaptive-Minecraft-Mob-Ai/tree/main/federated-data`
+`https://github.com/smokydastona/Minecraft-machine-learned-collected/tree/main/federated-data`
 
 **Sync triggers:**
 - Every 100 submissions per mob type
@@ -237,7 +237,7 @@ curl http://localhost:8787/api/download-tactics
 
 The worker automatically backs up federated learning data to GitHub:
 
-**Repository:** `smokydastona/Adaptive-Minecraft-Mob-Ai`  
+**Repository:** `smokydastona/Minecraft-machine-learned-collected`  
 **Path:** `federated-data/{mobType}-tactics.json`  
 **Frequency:** Every 100 submissions per mob type
 
@@ -290,7 +290,7 @@ Each backup creates/updates a file like `federated-data/zombie-tactics.json`:
 
 ### Viewing Backups
 
-Visit: https://github.com/smokydastona/Adaptive-Minecraft-Mob-Ai/tree/main/federated-data
+Visit: https://github.com/smokydastona/Minecraft-machine-learned-collected/tree/main/federated-data
 
 You'll see files like:
 - `zombie-tactics.json`

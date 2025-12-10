@@ -20,7 +20,7 @@ crons = ["0 * * * *"]  # Every hour at :00
 
 # Environment variables
 [vars]
-GITHUB_REPO = "smokydastona/Adaptive-Minecraft-Mob-Ai"
+GITHUB_REPO = "smokydastona/Minecraft-machine-learned-collected"
 GITHUB_BRANCH = "main"
 
 # Secrets (set with: wrangler secret put GITHUB_TOKEN)
@@ -32,4 +32,4 @@ GITHUB_BRANCH = "main"
 # 3. Paste your token when prompted
 # 
 # The worker will then automatically backup tactics to:
-# https://github.com/smokydastona/Adaptive-Minecraft-Mob-Ai/tree/main/federated-data
+# https://github.com/smokydastona/Minecraft-machine-learned-collected/tree/main/federated-data

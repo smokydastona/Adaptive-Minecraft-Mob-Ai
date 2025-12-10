@@ -27,7 +27,7 @@ npm run deploy
 ```
 
 Done! The worker will now automatically backup tactics to:
-https://github.com/smokydastona/Adaptive-Minecraft-Mob-Ai/tree/main/federated-data
+https://github.com/smokydastona/Minecraft-machine-learned-collected/tree/main/federated-data
 
 ---
 
@@ -81,7 +81,7 @@ Returns:
 ### File Structure
 
 ```
-Adaptive-Minecraft-Mob-Ai/
+Minecraft-machine-learned-collected/
 └── federated-data/
     ├── zombie-tactics.json          (100 submissions)
     ├── skeleton-tactics.json        (200 submissions)
@@ -131,7 +131,7 @@ Adaptive-Minecraft-Mob-Ai/
 
 ### GitHub Web Interface
 
-Visit: https://github.com/smokydastona/Adaptive-Minecraft-Mob-Ai/tree/main/federated-data
+Visit: https://github.com/smokydastona/Minecraft-machine-learned-collected/tree/main/federated-data
 
 Click any file to see:
 - Current tactics data
@@ -154,7 +154,7 @@ Click "History" to see evolution over time.
 
 Get raw JSON:
 ```bash
-curl https://raw.githubusercontent.com/smokydastona/Adaptive-Minecraft-Mob-Ai/main/federated-data/zombie-tactics.json
+curl https://raw.githubusercontent.com/smokydastona/Minecraft-machine-learned-collected/main/federated-data/zombie-tactics.json
 ```
 
 ---
@@ -230,7 +230,7 @@ wrangler secret put GITHUB_TOKEN
 **Problem:** Repository doesn't exist or is private
 
 **Solution:**
-- Make sure `Adaptive-Minecraft-Mob-Ai` repository exists
+- Make sure `Minecraft-machine-learned-collected` repository exists
 - Check it's owned by `smokydastona`
 - If private, ensure token has access
 
@@ -342,7 +342,7 @@ wrangler tail
 2. **Submit 100 tactics** (or call pipeline endpoint)
 
 3. **Check GitHub:**
-https://github.com/smokydastona/Adaptive-Minecraft-Mob-Ai/commits/main
+https://github.com/smokydastona/Minecraft-machine-learned-collected/commits/main
 
 You should see:
 ```
@@ -351,7 +351,7 @@ Committed by mca-ai-federated-learning
 ```
 
 4. **View file:**
-https://github.com/smokydastona/Adaptive-Minecraft-Mob-Ai/blob/main/federated-data/zombie-tactics.json
+https://github.com/smokydastona/Minecraft-machine-learned-collected/blob/main/federated-data/zombie-tactics.json
 
 ---
 
