@@ -296,13 +296,91 @@ public class FederatedLearning {
             return;
         }
         
-        LOGGER.info("[Federated Learning] Force sync triggered...");
+        LOGGER.info("[Federated Learning] Force sync triggered - uploading and downloading...");
         
-        // Submit any pending local tactics
-        submitLocalTactics();
+        // Submit any pending local tactics (bypassing time check)
+        forceSubmitLocalTactics();
         
-        // Download latest global tactics
-        downloadGlobalTactics();
+        // Download latest global tactics (bypassing time check)
+        forceDownloadGlobalTactics();
+        
+        LOGGER.info("[Federated Learning] Force sync completed");
+    }
+    
+    /**
+     * Force submit local tactics (ignores time interval)
+     */
+    private void forceSubmitLocalTactics() {
+        if (!syncEnabled || pendingSubmissions.isEmpty()) {
+            LOGGER.debug("No pending tactics to submit");
+            return;
+        }
+        
+        try {
+            LOGGER.info("Force uploading {} local tactics to global repository...", pendingSubmissions.size());
+            
+            int successCount = 0;
+            int failCount = 0;
+            
+            // Submit each pending tactic
+            for (TacticSubmission submission : pendingSubmissions.values()) {
+                boolean success = apiClient.submitTactic(
+                    submission.mobType,
+                    submission.action,
+                    submission.getAverageReward(),
+                    submission.getSuccessRate() > 0.5f ? "success" : "failure"
+                );
+                
+                if (success) {
+                    successCount++;
+                } else {
+                    failCount++;
+                }
+            }
+            
+            if (successCount > 0) {
+                LOGGER.info("✓ Uploaded {} tactics to Cloudflare ({} failed)", successCount, failCount);
+                lastSyncTime = System.currentTimeMillis();
+                
+                // Clear submitted tactics
+                pendingSubmissions.clear();
+                totalDataPointsContributed = 0;
+            } else {
+                LOGGER.warn("⚠ Failed to upload any tactics to API");
+            }
+            
+        } catch (Exception e) {
+            LOGGER.error("Error force-submitting tactics: {}", e.getMessage());
+        }
+    }
+    
+    /**
+     * Force download global tactics (ignores time interval)
+     */
+    private void forceDownloadGlobalTactics() {
+        if (!syncEnabled) {
+            return;
+        }
+        
+        try {
+            LOGGER.info("Force downloading global tactics from Cloudflare...");
+            
+            Map<String, Object> tacticsData = apiClient.downloadTactics();
+            
+            if (tacticsData != null && !tacticsData.isEmpty()) {
+                applyGlobalTactics(tacticsData);
+                lastPullTime = System.currentTimeMillis();
+                totalDataPointsDownloaded++;
+                
+                LOGGER.info("✓ Downloaded and applied global tactics from {} servers", 
+                    tacticsData.getOrDefault("server_count", "unknown"));
+            } else {
+                LOGGER.warn("⚠ No global tactics available from API yet");
+            }
+            
+        } catch (Exception e) {
+            LOGGER.error("Error force-downloading tactics: {}", e.getMessage());
+        }
     }
     
     /**

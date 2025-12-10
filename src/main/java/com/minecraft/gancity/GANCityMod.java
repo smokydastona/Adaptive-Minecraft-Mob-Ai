@@ -109,17 +109,29 @@ public class GANCityMod {
         long currentTime = System.currentTimeMillis();
         long timeSinceLastSave = (currentTime - lastSaveTime) / 1000; // seconds
         
-        LOGGER.info("[AUTO-SAVE] Saving ML models (last save: {}s ago)...", timeSinceLastSave);
+        LOGGER.info("═══════════════════════════════════════════════════════");
+        LOGGER.info("[AUTO-SAVE] Starting periodic save (last save: {}s ago)", timeSinceLastSave);
+        LOGGER.info("═══════════════════════════════════════════════════════");
         
         try {
-            // Save models and sync with Cloudflare if enabled
+            // 1. Save models locally
+            LOGGER.info("[AUTO-SAVE] Step 1/2: Saving ML models locally...");
             mobBehaviorAI.saveModel();
+            LOGGER.info("[AUTO-SAVE] ✓ Local models saved");
+            
+            // 2. Sync with Cloudflare (upload + download)
+            LOGGER.info("[AUTO-SAVE] Step 2/2: Syncing with Cloudflare...");
             mobBehaviorAI.syncWithCloudflare();
+            LOGGER.info("[AUTO-SAVE] ✓ Cloudflare sync completed");
             
             lastSaveTime = currentTime;
-            LOGGER.info("[AUTO-SAVE] ✓ Models saved and synced successfully");
+            LOGGER.info("═══════════════════════════════════════════════════════");
+            LOGGER.info("[AUTO-SAVE] ✓ All operations completed successfully!");
+            LOGGER.info("═══════════════════════════════════════════════════════");
         } catch (Exception e) {
-            LOGGER.error("[AUTO-SAVE] Failed to save models: {}", e.getMessage());
+            LOGGER.error("═══════════════════════════════════════════════════════");
+            LOGGER.error("[AUTO-SAVE] ✗ Failed: {}", e.getMessage());
+            LOGGER.error("═══════════════════════════════════════════════════════");
         }
     }
 
