@@ -20,7 +20,7 @@ import java.util.UUID;
 public class GANCityCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(Commands.literal("mcaai")
+        dispatcher.register(Commands.literal("amai")
             .requires(source -> source.hasPermission(2))
             .then(Commands.literal("test")
                 .then(Commands.literal("dialogue")
@@ -89,10 +89,10 @@ public class GANCityCommand {
         }
         source.sendSuccess(() -> Component.literal(""), false);
         source.sendSuccess(() -> Component.literal("§eCommands:§r"), false);
-        source.sendSuccess(() -> Component.literal("  /mcaai info - Show mod information"), false);
-        source.sendSuccess(() -> Component.literal("  /mcaai stats - View AI statistics"), false);
-        source.sendSuccess(() -> Component.literal("  /mcaai compat - View mod compatibility report"), false);
-        source.sendSuccess(() -> Component.literal("  /mcaai test dialogue <type> - Test dialogue generation"), false);
+        source.sendSuccess(() -> Component.literal("  /amai info - Show mod information"), false);
+        source.sendSuccess(() -> Component.literal("  /amai stats - View AI statistics"), false);
+        source.sendSuccess(() -> Component.literal("  /amai compat - View mod compatibility report"), false);
+        source.sendSuccess(() -> Component.literal("  /amai test dialogue <type> - Test dialogue generation"), false);
         
         if (!mcaLoaded) {
             source.sendSuccess(() -> Component.literal(""), false);
