@@ -164,17 +164,33 @@ async function handleSubmitTactics(request, env, corsHeaders) {
     existing.submissions += 1;
     existing.lastUpdate = Date.now();
     
+    // Track individual submissions for batch analysis
+    if (!existing.submissionBatch) {
+      existing.submissionBatch = [];
+      existing.batchStartSubmission = existing.submissions;
+    }
+    
+    // Add current submission to batch for validation
+    existing.submissionBatch.push({
+      action: data.action,
+      reward: data.reward,
+      context: data.context,
+      outcome: data.outcome,
+      timestamp: data.timestamp || Date.now()
+    });
+    
     // Save back to KV
     await env.TACTICS_KV.put(key, JSON.stringify(existing));
     
     // Update global stats
     await incrementStats(env, 'totalSubmissions');
     
-    // Schedule GitHub sync if enough new data (every 100 submissions)
-    if (existing.submissions % 100 === 0 && env.GITHUB_TOKEN) {
-      console.log(`${data.mobType} reached ${existing.submissions} submissions - triggering GitHub sync`);
-      // Trigger async GitHub backup (don't wait for it)
-      ctx.waitUntil(syncToGitHub(env, data.mobType, existing));
+    // Process batch and sync to GitHub every 100 submissions
+    const batchSize = existing.submissionBatch.length;
+    if (batchSize >= 100 && env.GITHUB_TOKEN) {
+      console.log(`${data.mobType} reached ${batchSize} submissions in batch - triggering validation & GitHub sync`);
+      // Trigger async batch processing and GitHub backup
+      ctx.waitUntil(processBatchAndSync(env, data.mobType, existing));
     }
     
     return new Response(JSON.stringify({
@@ -589,11 +605,218 @@ function calculateConfidence(cfResult, hfResult) {
 }
 
 /**
+ * Process batch of submissions and sync to GitHub
+ * Validates and compares submissions before uploading
+ */
+async function processBatchAndSync(env, mobType, tacticsData) {
+  console.log(`Processing batch of ${tacticsData.submissionBatch.length} submissions for ${mobType}`);
+  
+  // 1. Analyze batch for anomalies
+  const analysis = analyzeBatch(tacticsData.submissionBatch);
+  
+  // 2. Validate tactics quality
+  const validation = validateTactics(tacticsData.tactics, analysis);
+  
+  // 3. Compare with previous batch (if exists)
+  const comparison = await compareBatches(env, mobType, analysis);
+  
+  // 4. Generate batch report
+  const batchReport = {
+    batchId: `${mobType}-${Date.now()}`,
+    submissionCount: tacticsData.submissionBatch.length,
+    startSubmission: tacticsData.batchStartSubmission,
+    endSubmission: tacticsData.submissions,
+    analysis: analysis,
+    validation: validation,
+    comparison: comparison,
+    processedAt: Date.now()
+  };
+  
+  // 5. Log batch report
+  console.log(`Batch Analysis for ${mobType}:`, JSON.stringify(batchReport, null, 2));
+  
+  // 6. Sync validated data to GitHub
+  const syncResult = await syncToGitHub(env, mobType, tacticsData, batchReport);
+  
+  // 7. Clear batch and save analysis for next comparison
+  const key = `tactics:${mobType}`;
+  tacticsData.submissionBatch = [];
+  tacticsData.batchStartSubmission = tacticsData.submissions;
+  tacticsData.lastBatchAnalysis = analysis;
+  
+  await env.TACTICS_KV.put(key, JSON.stringify(tacticsData));
+  
+  return syncResult;
+}
+
+/**
+ * Analyze batch of submissions for patterns and anomalies
+ */
+function analyzeBatch(batch) {
+  const actionGroups = {};
+  const rewardStats = {
+    min: Infinity,
+    max: -Infinity,
+    sum: 0,
+    values: []
+  };
+  
+  // Group by action
+  batch.forEach(submission => {
+    if (!actionGroups[submission.action]) {
+      actionGroups[submission.action] = {
+        count: 0,
+        rewards: [],
+        successCount: 0,
+        failureCount: 0
+      };
+    }
+    
+    const group = actionGroups[submission.action];
+    group.count++;
+    group.rewards.push(submission.reward);
+    rewardStats.values.push(submission.reward);
+    rewardStats.sum += submission.reward;
+    rewardStats.min = Math.min(rewardStats.min, submission.reward);
+    rewardStats.max = Math.max(rewardStats.max, submission.reward);
+    
+    if (submission.outcome === 'success') {
+      group.successCount++;
+    } else {
+      group.failureCount++;
+    }
+  });
+  
+  // Calculate statistics per action
+  const actionStats = {};
+  for (const [action, group] of Object.entries(actionGroups)) {
+    const avgReward = group.rewards.reduce((a, b) => a + b, 0) / group.rewards.length;
+    const successRate = group.count > 0 ? group.successCount / group.count : 0;
+    
+    actionStats[action] = {
+      count: group.count,
+      avgReward: parseFloat(avgReward.toFixed(4)),
+      successRate: parseFloat(successRate.toFixed(4)),
+      successCount: group.successCount,
+      failureCount: group.failureCount,
+      minReward: Math.min(...group.rewards),
+      maxReward: Math.max(...group.rewards)
+    };
+  }
+  
+  // Overall batch statistics
+  const avgReward = rewardStats.sum / batch.length;
+  
+  return {
+    batchSize: batch.length,
+    actionStats: actionStats,
+    overallAvgReward: parseFloat(avgReward.toFixed(4)),
+    rewardRange: {
+      min: rewardStats.min,
+      max: rewardStats.max
+    },
+    uniqueActions: Object.keys(actionGroups).length
+  };
+}
+
+/**
+ * Validate tactics quality based on batch analysis
+ */
+function validateTactics(tactics, analysis) {
+  const warnings = [];
+  const recommendations = [];
+  
+  // Check for low-performing tactics
+  for (const [tacticKey, stats] of Object.entries(analysis.actionStats)) {
+    if (stats.successRate < 0.3 && stats.count >= 10) {
+      warnings.push(`Action "${tacticKey}" has low success rate: ${(stats.successRate * 100).toFixed(1)}%`);
+    }
+    
+    if (stats.avgReward < 0 && stats.count >= 10) {
+      warnings.push(`Action "${tacticKey}" has negative average reward: ${stats.avgReward}`);
+    }
+    
+    if (stats.successRate > 0.7 && stats.count >= 10) {
+      recommendations.push(`Action "${tacticKey}" performing well: ${(stats.successRate * 100).toFixed(1)}% success rate`);
+    }
+  }
+  
+  return {
+    valid: warnings.length < analysis.uniqueActions, // Valid if not all actions have warnings
+    warnings: warnings,
+    recommendations: recommendations,
+    quality: warnings.length === 0 ? 'high' : warnings.length < 3 ? 'medium' : 'low'
+  };
+}
+
+/**
+ * Compare current batch with previous batch
+ */
+async function compareBatches(env, mobType, currentAnalysis) {
+  const key = `tactics:${mobType}`;
+  
+  try {
+    const stored = await env.TACTICS_KV.get(key);
+    if (!stored) {
+      return { status: 'no_previous_batch', message: 'First batch for this mob type' };
+    }
+    
+    const data = JSON.parse(stored);
+    if (!data.lastBatchAnalysis) {
+      return { status: 'no_previous_analysis', message: 'No previous batch to compare' };
+    }
+    
+    const prev = data.lastBatchAnalysis;
+    const improvements = [];
+    const regressions = [];
+    
+    // Compare overall metrics
+    const rewardDiff = currentAnalysis.overallAvgReward - prev.overallAvgReward;
+    if (Math.abs(rewardDiff) > 0.01) {
+      if (rewardDiff > 0) {
+        improvements.push(`Overall reward improved by ${(rewardDiff * 100).toFixed(2)}%`);
+      } else {
+        regressions.push(`Overall reward decreased by ${(Math.abs(rewardDiff) * 100).toFixed(2)}%`);
+      }
+    }
+    
+    // Compare action performance
+    for (const action of Object.keys(currentAnalysis.actionStats)) {
+      if (prev.actionStats[action]) {
+        const currentSuccess = currentAnalysis.actionStats[action].successRate;
+        const prevSuccess = prev.actionStats[action].successRate;
+        const successDiff = currentSuccess - prevSuccess;
+        
+        if (Math.abs(successDiff) > 0.1) {
+          if (successDiff > 0) {
+            improvements.push(`"${action}" success rate improved: ${(prevSuccess * 100).toFixed(1)}% → ${(currentSuccess * 100).toFixed(1)}%`);
+          } else {
+            regressions.push(`"${action}" success rate decreased: ${(prevSuccess * 100).toFixed(1)}% → ${(currentSuccess * 100).toFixed(1)}%`);
+          }
+        }
+      }
+    }
+    
+    return {
+      status: 'compared',
+      improvements: improvements,
+      regressions: regressions,
+      trend: improvements.length > regressions.length ? 'improving' : 
+             improvements.length < regressions.length ? 'declining' : 'stable'
+    };
+    
+  } catch (error) {
+    console.error('Batch comparison error:', error);
+    return { status: 'error', message: error.message };
+  }
+}
+
+/**
  * Sync tactics data to GitHub repository for persistence
- * Repository: smokydastona/Adaptive-Minecraft-Mob-Ai
+ * Repository: smokydastona/Minecraft-machine-learned-collected
  * Path: federated-data/{mobType}-tactics.json
  */
-async function syncToGitHub(env, mobType, tacticsData) {
+async function syncToGitHub(env, mobType, tacticsData, batchReport) {
   if (!env.GITHUB_TOKEN) {
     console.log('GitHub sync skipped - GITHUB_TOKEN not configured');
     return { status: 'skipped', reason: 'No GITHUB_TOKEN' };
@@ -605,12 +828,19 @@ async function syncToGitHub(env, mobType, tacticsData) {
     const branch = 'main';
     const path = `federated-data/${mobType}-tactics.json`;
     
-    // Prepare JSON content
+    // Prepare JSON content with batch analysis
     const content = JSON.stringify({
       mobType: mobType,
       submissions: tacticsData.submissions,
       lastUpdate: tacticsData.lastUpdate,
       syncedAt: Date.now(),
+      batchReport: batchReport ? {
+        batchId: batchReport.batchId,
+        submissionRange: `${batchReport.startSubmission}-${batchReport.endSubmission}`,
+        validationQuality: batchReport.validation.quality,
+        trend: batchReport.comparison.trend,
+        processedAt: batchReport.processedAt
+      } : null,
       tactics: Object.values(tacticsData.tactics)
         .sort((a, b) => b.avgReward - a.avgReward)
         .map(t => ({
@@ -648,7 +878,8 @@ async function syncToGitHub(env, mobType, tacticsData) {
     }
     
     // Create or update file
-    const commitMessage = `Federated learning: Update ${mobType} tactics (${tacticsData.submissions} submissions)`;
+    const batchInfo = batchReport ? ` [Batch: ${batchReport.validation.quality} quality, ${batchReport.comparison.trend} trend]` : '';
+    const commitMessage = `Federated learning: Update ${mobType} tactics (${tacticsData.submissions} submissions)${batchInfo}`;
     
     const updatePayload = {
       message: commitMessage,

@@ -1,4 +1,43 @@
-# Cloudflare Workers v1.3.0 - Compatibility Fixes
+# Cloudflare Workers - Compatibility Fixes & Features
+
+## Version 1.4.0 - Batch Validation & Comparison (Current)
+
+### New Features
+- **Batch Processing**: Collects 100 submissions before syncing to GitHub
+- **Submission Analysis**: Analyzes patterns, anomalies, and performance metrics
+- **Quality Validation**: Validates tactics quality (high/medium/low)
+- **Batch Comparison**: Compares current batch with previous batch
+- **Trend Detection**: Identifies improving/declining/stable trends
+- **Enhanced Commits**: GitHub commits include quality and trend information
+
+### Batch Processing Pipeline
+1. **Collection Phase**: Gather 100 submissions per mob type
+2. **Analysis Phase**: 
+   - Group submissions by action
+   - Calculate success rates per action
+   - Identify min/max rewards
+   - Detect unique action patterns
+3. **Validation Phase**:
+   - Check for low-performing tactics (success rate < 30%)
+   - Flag negative average rewards
+   - Recommend high-performing tactics (success rate > 70%)
+   - Assign quality score: high/medium/low
+4. **Comparison Phase**:
+   - Compare with previous batch analysis
+   - Track improvements (reward increase, success rate increase)
+   - Track regressions (reward decrease, success rate decrease)
+   - Determine trend: improving/declining/stable
+5. **Sync Phase**: Upload validated data to GitHub with batch report
+
+### GitHub Commit Messages
+Now include quality and trend information:
+```
+Federated learning: Update zombie tactics (500 submissions) [Batch: high quality, improving trend]
+```
+
+---
+
+## Version 1.3.0 - Full Compatibility
 
 ## Executive Summary
 
