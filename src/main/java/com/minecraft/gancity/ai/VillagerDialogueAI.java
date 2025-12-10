@@ -1,33 +1,17 @@
 package com.minecraft.gancity.ai;
 
-import ai.djl.Model;
-import ai.djl.inference.Predictor;
-import ai.djl.ndarray.NDArray;
-import ai.djl.ndarray.NDList;
-import ai.djl.ndarray.NDManager;
-import ai.djl.translate.Batchifier;
-import ai.djl.translate.Translator;
-import ai.djl.translate.TranslatorContext;
-import com.minecraft.gancity.ml.TransformerDialogue;
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 
 /**
  * AI-powered dialogue generation system for MCA villagers
- * Now with GPT-style transformer dialogue for natural conversations
+ * Uses template-based dialogue with personality tracking (ML models optional)
  */
 public class VillagerDialogueAI {
     private static final Logger LOGGER = LogUtils.getLogger();
     
-    private boolean aiEnabled = false;
-    private boolean transformerEnabled = false;
-    private Model dialogueModel;
-    private TransformerDialogue transformerDialogue;
     private final Map<UUID, VillagerPersonality> villagerPersonalities = new HashMap<>();
     private final Random random = new Random();
 
@@ -115,43 +99,9 @@ public class VillagerDialogueAI {
     }
 
     public VillagerDialogueAI() {
-        tryLoadAIModel();
-        tryLoadTransformerDialogue();
+        LOGGER.info("VillagerDialogueAI initialized with template-based dialogue system");
     }
     
-    /**
-     * Initialize GPT-style transformer dialogue system
-     */
-    private void tryLoadTransformerDialogue() {
-        try {
-            transformerDialogue = new TransformerDialogue();
-            transformerEnabled = true;
-            LOGGER.info("Transformer dialogue system activated - villagers will use GPT-style conversations");
-        } catch (Exception e) {
-            LOGGER.warn("Transformer dialogue not available, using template system: {}", e.getMessage());
-            transformerEnabled = false;
-        }
-    }
-
-    /**
-     * Try to load dialogue AI model if available
-     */
-    private void tryLoadAIModel() {
-        try {
-            Path modelPath = Paths.get("models", "villager_dialogue");
-            
-            if (Files.exists(modelPath)) {
-                // TODO: Load transformer model for text generation
-                aiEnabled = true;
-                LOGGER.info("Villager dialogue AI model loaded successfully");
-            } else {
-                LOGGER.info("No dialogue AI model found, using template-based system");
-            }
-        } catch (Exception e) {
-            LOGGER.warn("Failed to load dialogue AI model: {}", e.getMessage());
-        }
-    }
-
     /**
      * Generate dialogue response based on context
      */
@@ -164,53 +114,9 @@ public class VillagerDialogueAI {
      */
     public String generateDialogue(UUID villagerId, String playerMessage, DialogueContext context) {
         VillagerPersonality personality = getOrCreatePersonality(villagerId);
-        
-        // Use transformer dialogue if enabled and player provided message
-        if (transformerEnabled && transformerDialogue != null && !playerMessage.isEmpty()) {
-            return generateWithTransformer(villagerId.toString(), playerMessage, personality, context);
-        } else if (aiEnabled) {
-            return generateWithAI(personality, context);
-        } else {
-            return generateWithTemplates(personality, context);
-        }
-    }
-    
-    /**
-     * GPT-style transformer dialogue generation
-     */
-    private String generateWithTransformer(String villagerId, String playerMessage, 
-                                           VillagerPersonality personality, DialogueContext context) {
-        // Build context for transformer
-        TransformerDialogue.DialogueContext transformerContext = new TransformerDialogue.DialogueContext()
-            .profession(context.profession != null ? context.profession : "villager")
-            .personality(personality.getTraitName())
-            .mood(personality.getMood())
-            .relationship(personality.getRelationshipLevel(context.playerId))
-            .biome(context.biome != null ? context.biome : "plains")
-            .name(context.villagerName != null ? context.villagerName : "Villager");
-        
-        // Add recent events if any
-        if (context.recentEvents != null && context.recentEvents.length > 0) {
-            transformerContext.events(context.recentEvents);
-        }
-        
-        // Generate response
-        String response = transformerDialogue.generateResponse(villagerId, playerMessage, transformerContext);
-        
-        // Update personality based on interaction
-        personality.recordInteraction(context, playerMessage);
-        
-        return response;
-    }
-
-    /**
-     * AI-powered dialogue generation (legacy system)
-     */
-    private String generateWithAI(VillagerPersonality personality, DialogueContext context) {
-        // Fallback to templates for now
         return generateWithTemplates(personality, context);
     }
-
+    
     /**
      * Template-based dialogue with personality
      */
