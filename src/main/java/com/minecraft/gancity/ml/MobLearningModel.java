@@ -27,14 +27,24 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.*;
 
 /**
  * Neural Network for mob behavior learning using Q-Learning approach
  * Learns optimal actions based on combat state and outcomes
+ * 
+ * CRITICAL FIX: Training now runs in background thread to prevent tick lag
  */
 public class MobLearningModel {
     private static final Logger LOGGER = LogUtils.getLogger();
+    
+    // Background training executor - NEVER train on main thread
+    private static final ExecutorService TRAINING_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "MobLearning-Trainer");
+        t.setDaemon(true);
+        t.setPriority(Thread.MIN_PRIORITY);
+        return t;
+    });
     
     // Network architecture
     private static final int INPUT_SIZE = 10;  // State features: health, distance, time, etc.
@@ -133,11 +143,15 @@ public class MobLearningModel {
 
     /**
      * Select action using epsilon-greedy policy
+     * CRITICAL: NaN protection - validates input state
      * @param state Current combat state
      * @param validActions List of valid actions in this context
      * @return Selected action name
      */
     public String selectAction(float[] state, List<String> validActions) {
+        // NaN Protection: sanitize state vector
+        state = sanitizeState(state);
+        
         // Exploration: random action
         if (Math.random() < epsilon) {
             return validActions.get(new Random().nextInt(validActions.size()));
@@ -179,10 +193,20 @@ public class MobLearningModel {
 
     /**
      * Store experience for replay learning
+     * CRITICAL: Sanitizes state vectors to prevent NaN corruption
      */
     public void addExperience(float[] state, String action, float reward, float[] nextState, boolean done) {
         Integer actionIdx = actionIndexMap.get(action);
         if (actionIdx == null) return;
+        
+        // NaN Protection: sanitize both states
+        state = sanitizeState(state);
+        nextState = sanitizeState(nextState);
+        
+        // Sanitize reward
+        if (Float.isNaN(reward) || Float.isInfinite(reward)) {
+            reward = 0.0f;
+        }
         
         Experience exp = new Experience(state, actionIdx, reward, nextState, done);
         
@@ -194,9 +218,15 @@ public class MobLearningModel {
             replayBuffer.poll();
         }
         
-        // Train if we have enough experiences
+        // Queue training on background thread (CRITICAL: never block main thread)
         if (replayBuffer.size() >= BATCH_SIZE && trainingSteps % 4 == 0) {
-            trainOnBatch();
+            TRAINING_EXECUTOR.submit(() -> {
+                try {
+                    trainOnBatch();
+                } catch (Exception e) {
+                    LOGGER.error("Training error in background thread", e);
+                }
+            });
         }
         
         trainingSteps++;
@@ -281,6 +311,29 @@ public class MobLearningModel {
         Collections.shuffle(buffer);
         return buffer.subList(0, Math.min(BATCH_SIZE, buffer.size()));
     }
+    
+    /**
+     * Sanitize state vector to prevent NaN/Inf corruption
+     * CRITICAL: All state vectors must pass through this
+     */
+    private float[] sanitizeState(float[] state) {
+        if (state == null || state.length != INPUT_SIZE) {
+            return new float[INPUT_SIZE]; // Return zeros
+        }
+        
+        float[] clean = new float[state.length];
+        for (int i = 0; i < state.length; i++) {
+            float v = state[i];
+            // Replace NaN/Inf with 0
+            if (Float.isNaN(v) || Float.isInfinite(v)) {
+                clean[i] = 0.0f;
+            } else {
+                // Clamp to reasonable range [-10, 10]
+                clean[i] = Math.max(-10.0f, Math.min(10.0f, v));
+            }
+        }
+        return clean;
+    }
 
     /**
      * Save the trained model
@@ -324,6 +377,16 @@ public class MobLearningModel {
      * Clean up resources
      */
     public void close() {
+        // Shutdown training executor gracefully
+        TRAINING_EXECUTOR.shutdown();
+        try {
+            if (!TRAINING_EXECUTOR.awaitTermination(5, TimeUnit.SECONDS)) {
+                TRAINING_EXECUTOR.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            TRAINING_EXECUTOR.shutdownNow();
+        }
+        
         if (trainer != null) {
             trainer.close();
         }

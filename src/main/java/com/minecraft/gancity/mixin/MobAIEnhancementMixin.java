@@ -85,6 +85,7 @@ public abstract class MobAIEnhancementMixin {
      * AI-Enhanced Melee Attack Goal
      * Uses machine learning to select attack patterns
      * VILLAGER SUPPORT: Persistent individual profiles for MCA AND vanilla villagers
+     * CRITICAL FIX: Tick throttling to prevent lag
      */
     private static class AIEnhancedMeleeGoal extends Goal {
         private final Mob mob;
@@ -94,6 +95,7 @@ public abstract class MobAIEnhancementMixin {
         private final boolean isVillager;  // Persistent profile support (MCA or vanilla)
         private LivingEntity target;
         private int ticksUntilNextAction;
+        private int ticksUntilNextAIUpdate;  // CRITICAL: Throttle AI decisions
         private String currentAction = "straight_charge";
         private final MobBehaviorAI behaviorAI;
         private final String mobId;  // Unique ID for this mob instance
@@ -101,6 +103,8 @@ public abstract class MobAIEnhancementMixin {
         private float initialMobHealth;
         private float initialTargetHealth;
         private int combatTicks = 0;
+        
+        private static final int AI_UPDATE_INTERVAL = 20; // AI updates every 20 ticks (1 second)
         
         public AIEnhancedMeleeGoal(Mob mob, double speedModifier, boolean followEvenIfNotSeen, 
                                    boolean enableEnvironmental, boolean isVillager) {
@@ -177,6 +181,7 @@ public abstract class MobAIEnhancementMixin {
         public void start() {
             this.mob.getNavigation().moveTo(this.target, this.speedModifier);
             this.ticksUntilNextAction = 0;
+            this.ticksUntilNextAIUpdate = AI_UPDATE_INTERVAL;
             this.combatTicks = 0;
             this.initialMobHealth = mob.getHealth() / mob.getMaxHealth();
             this.initialTargetHealth = target.getHealth() / target.getMaxHealth();
@@ -205,13 +210,18 @@ public abstract class MobAIEnhancementMixin {
             
             this.mob.getLookControl().setLookAt(this.target, 30.0F, 30.0F);
             
-            // Re-evaluate action periodically
-            if (--this.ticksUntilNextAction <= 0) {
-                selectNextAction();
-                this.ticksUntilNextAction = 20 + mob.getRandom().nextInt(20); // 1-2 seconds
+            // CRITICAL: Throttle AI updates to every AI_UPDATE_INTERVAL ticks
+            if (--this.ticksUntilNextAIUpdate <= 0) {
+                // Re-evaluate action periodically
+                if (--this.ticksUntilNextAction <= 0) {
+                    selectNextAction();
+                    this.ticksUntilNextAction = 20 + mob.getRandom().nextInt(20); // 1-2 seconds
+                }
+                
+                this.ticksUntilNextAIUpdate = AI_UPDATE_INTERVAL;
             }
             
-            // Execute current action
+            // Execute current action (lightweight, can run every tick)
             executeAction();
         }
         

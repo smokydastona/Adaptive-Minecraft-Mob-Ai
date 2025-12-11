@@ -2,16 +2,21 @@ package com.minecraft.gancity.ml;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Prioritized Experience Replay - samples important experiences more frequently
  * Uses Sum Tree data structure for efficient priority-based sampling
+ * 
+ * CRITICAL FIX: Thread-safe with read-write locks for concurrent training
  */
 public class PrioritizedReplayBuffer {
     
     private final int capacity;
     private final Queue<Experience> buffer = new ConcurrentLinkedQueue<>();
     private final PriorityQueue<PrioritizedExperience> priorityQueue;
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private float alpha = 0.6f;  // Priority exponent
     private float beta = 0.4f;   // Importance sampling exponent
     private float betaIncrement = 0.001f;
@@ -28,27 +33,33 @@ public class PrioritizedReplayBuffer {
     
     /**
      * Add experience with default maximum priority
+     * Thread-safe with write lock
      */
     public void add(float[] state, int action, float reward, float[] nextState, boolean done) {
         Experience exp = new Experience(state, action, reward, nextState, done);
         
-        // Remove oldest if at capacity
-        while (buffer.size() >= capacity) {
-            Experience removed = buffer.poll();
-            // Also remove from priority queue
-            priorityQueue.removeIf(pExp -> pExp.experience == removed);
-        }
-        
-        buffer.offer(exp);
-        
-        // Add to priority queue with max priority (new experiences are important)
-        PrioritizedExperience pExp = new PrioritizedExperience(exp, maxPriority);
-        priorityQueue.offer(pExp);
-        
-        // Periodic cleanup to prevent memory bloat
-        addCounter++;
-        if (addCounter % CLEANUP_FREQUENCY == 0) {
-            cleanupQueue();
+        lock.writeLock().lock();
+        try {
+            // Remove oldest if at capacity
+            while (buffer.size() >= capacity) {
+                Experience removed = buffer.poll();
+                // Also remove from priority queue
+                priorityQueue.removeIf(pExp -> pExp.experience == removed);
+            }
+            
+            buffer.offer(exp);
+            
+            // Add to priority queue with max priority (new experiences are important)
+            PrioritizedExperience pExp = new PrioritizedExperience(exp, maxPriority);
+            priorityQueue.offer(pExp);
+            
+            // Periodic cleanup to prevent memory bloat
+            addCounter++;
+            if (addCounter % CLEANUP_FREQUENCY == 0) {
+                cleanupQueue();
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
     }
     
@@ -62,50 +73,58 @@ public class PrioritizedReplayBuffer {
     
     /**
      * Sample batch based on priorities with importance sampling weights
+     * Thread-safe with read lock
      */
     public SampledBatch sample(int batchSize) {
-        List<Experience> experiences = new ArrayList<>();
-        List<Float> weights = new ArrayList<>();
-        
-        // Increase beta over time (anneal to 1.0)
-        beta = Math.min(1.0f, beta + betaIncrement);
-        
-        // Calculate total priority
-        float totalPriority = 0.0f;
-        for (PrioritizedExperience pExp : priorityQueue) {
-            totalPriority += Math.pow(pExp.priority, alpha);
-        }
-        
-        // Sample experiences based on priority
-        List<PrioritizedExperience> sampledList = new ArrayList<>();
-        Random rand = new Random();
-        
-        for (int i = 0; i < Math.min(batchSize, priorityQueue.size()); i++) {
-            float randValue = rand.nextFloat() * totalPriority;
-            float cumSum = 0.0f;
+        lock.readLock().lock();
+        try {
+            List<Experience> experiences = new ArrayList<>();
+            List<Float> weights = new ArrayList<>();
             
+            // Increase beta over time (anneal to 1.0)
+            beta = Math.min(1.0f, beta + betaIncrement);
+            
+            // Calculate total priority
+            float totalPriority = 0.0f;
             for (PrioritizedExperience pExp : priorityQueue) {
-                cumSum += Math.pow(pExp.priority, alpha);
-                if (cumSum >= randValue) {
-                    experiences.add(pExp.experience);
-                    sampledList.add(pExp);
-                    
-                    // Calculate importance sampling weight
-                    float probability = (float) (Math.pow(pExp.priority, alpha) / totalPriority);
-                    float weight = (float) Math.pow(buffer.size() * probability, -beta);
-                    weights.add(weight);
-                    break;
+                totalPriority += Math.pow(pExp.priority, alpha);
+            }
+            
+            // Sample experiences based on priority
+            List<PrioritizedExperience> sampledList = new ArrayList<>();
+            Random rand = new Random();
+            
+            for (int i = 0; i < Math.min(batchSize, priorityQueue.size()); i++) {
+                float randValue = rand.nextFloat() * totalPriority;
+                float cumSum = 0.0f;
+                
+                for (PrioritizedExperience pExp : priorityQueue) {
+                    cumSum += Math.pow(pExp.priority, alpha);
+                    if (cumSum >= randValue) {
+                        experiences.add(pExp.experience);
+                        sampledList.add(pExp);
+                        
+                        // Calculate importance sampling weight
+                        float probability = (float) (Math.pow(pExp.priority, alpha) / totalPriority);
+                        float weight = (float) Math.pow(buffer.size() * probability, -beta);
+                        weights.add(weight);
+                        break;
+                    }
                 }
             }
+            
+            // Normalize weights
+            if (!weights.isEmpty()) {
+                float maxWeight = Collections.max(weights);
+                for (int i = 0; i < weights.size(); i++) {
+                    weights.set(i, weights.get(i) / maxWeight);
+                }
+            }
+            
+            return new SampledBatch(experiences, weights, sampledList);
+        } finally {
+            lock.readLock().unlock();
         }
-        
-        // Normalize weights
-        float maxWeight = Collections.max(weights);
-        for (int i = 0; i < weights.size(); i++) {
-            weights.set(i, weights.get(i) / maxWeight);
-        }
-        
-        return new SampledBatch(experiences, weights, sampledList);
     }
     
     /**

@@ -100,6 +100,7 @@ public class ModelPersistence {
     
     /**
      * Save DoubleDQN model
+     * CRITICAL FIX: Atomic write with .tmp -> rename pattern
      */
     public void saveDoubleDQN(DoubleDQN dqn) {
         if (dqn == null) {
@@ -110,8 +111,29 @@ public class ModelPersistence {
             Path policyPath = modelDirectory.resolve(DOUBLE_DQN_FILE);
             Path targetPath = modelDirectory.resolve(TARGET_NETWORK_FILE);
             
-            // Save both policy and target networks
-            dqn.save(modelDirectory);
+            // Write to .tmp files first
+            Path tmpDir = modelDirectory.resolve("tmp");
+            Files.createDirectories(tmpDir);
+            
+            try {
+                // Save both policy and target networks to temp directory
+                dqn.save(tmpDir);
+                
+                // Atomic move from tmp to final location
+                Path tmpPolicy = tmpDir.resolve(DOUBLE_DQN_FILE);
+                Path tmpTarget = tmpDir.resolve(TARGET_NETWORK_FILE);
+                
+                if (Files.exists(tmpPolicy)) {
+                    Files.move(tmpPolicy, policyPath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                }
+                if (Files.exists(tmpTarget)) {
+                    Files.move(tmpTarget, targetPath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                }
+                
+            } finally {
+                // Cleanup temp directory
+                deleteDirectory(tmpDir);
+            }
             
             LOGGER.info("Saved DoubleDQN model to {}", modelDirectory);
             updateMetadata("double_dqn", System.currentTimeMillis());

@@ -12,22 +12,20 @@ import java.util.concurrent.*;
  * Federated Learning System - Syncs learned knowledge via Cloudflare Worker API
  * allowing all servers to benefit from collective learning with zero configuration.
  * 
- * Features:
+ * CRITICAL: CURRENTLY DISABLED - Implementation incomplete
+ * Will throw exceptions if used. Needs proper Cloudflare Worker deployment.
+ * 
+ * Features (when implemented):
  * - Automatic sync to Cloudflare Worker API (no Git required)
  * - Privacy-safe aggregation (no player identifiable data)
  * - Works out-of-the-box for all players (no SSH/credentials needed)
  * - Async operations (non-blocking gameplay)
  * - Graceful degradation if API unavailable
- * 
- * Data Flow:
- * 1. Local server records combat outcomes
- * 2. Periodically submits tactics to API (5 min interval)
- * 3. Downloads aggregated global tactics from API (10 min interval)
- * 4. Applies global knowledge to local AI systems
- * 5. All servers contribute and benefit from collective learning
  */
 public class FederatedLearning {
     private static final Logger LOGGER = LogUtils.getLogger();
+    
+    private static final boolean FEATURE_ENABLED = false; // CRITICAL: Disabled until Cloudflare Worker deployed
     
     // Sync Configuration
     private static final long SYNC_INTERVAL_MS = 300_000; // 5 minutes (submit)
@@ -70,6 +68,13 @@ public class FederatedLearning {
     private long lastPullTime = 0;
     
     public FederatedLearning(Path localDataPath, String apiEndpoint) {
+        // CRITICAL: Feature disabled until proper implementation
+        if (!FEATURE_ENABLED) {
+            LOGGER.warn("Federated Learning is disabled - feature incomplete");
+            this.syncEnabled = false;
+            return;
+        }
+        
         this.syncEnabled = apiEndpoint != null && !apiEndpoint.isEmpty();
         
         if (syncEnabled) {
@@ -94,9 +99,10 @@ public class FederatedLearning {
     /**
      * Record a combat outcome for federated learning
      * Aggregates locally before submitting to API
+     * CRITICAL: Returns early if feature disabled
      */
     public void recordCombatOutcome(String mobType, String action, float reward, boolean success) {
-        if (!syncEnabled) return;
+        if (!FEATURE_ENABLED || !syncEnabled) return;
         
         String key = mobType + ":" + action;
         TacticSubmission submission = pendingSubmissions.computeIfAbsent(key, 
