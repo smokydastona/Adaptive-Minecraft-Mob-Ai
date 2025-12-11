@@ -46,6 +46,18 @@ public class GANCityMod {
     private void commonSetup(final FMLCommonSetupEvent event) {
         LOGGER.info("MCA AI Enhanced - Initializing AI systems (SERVER-ONLY)...");
         
+        // Configure DJL to download native libraries to game directory instead of user home
+        // This makes it easy to find/delete and works on servers without user directories
+        try {
+            String gameDir = System.getProperty("user.dir"); // Minecraft instance root
+            String djlCachePath = gameDir + "/libraries/ai.djl";
+            System.setProperty("DJL_CACHE_DIR", djlCachePath);
+            System.setProperty("ai.djl.offline", "false"); // Allow downloads
+            LOGGER.info("DJL cache configured: {}", djlCachePath);
+        } catch (Exception e) {
+            LOGGER.warn("Could not configure DJL cache path: {}", e.getMessage());
+        }
+        
         // Initialize mod compatibility system (async for performance)
         event.enqueueWork(() -> {
             ModCompatibility.init();
