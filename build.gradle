@@ -91,20 +91,21 @@ dependencies {
     jarJar(group: 'it.unimi.dsi', name: 'fastutil', version: '[8.5.0,8.6.0)')
     implementation 'it.unimi.dsi:fastutil:8.5.12'
     
-    // Deep Java Library (DJL) for ML inference - bundled via jarJar
-    // These will be included in the mod JAR at runtime
+    // Deep Java Library (DJL) for ML inference - BUNDLED (Java APIs only)
+    // Bundle the Java API JARs (small, no native code)
     jarJar(group: 'ai.djl', name: 'api', version: '[0.25.0,0.26.0)')
     jarJar(group: 'ai.djl', name: 'basicdataset', version: '[0.25.0,0.26.0)')
-    jarJar(group: 'ai.djl.pytorch', name: 'pytorch-engine', version: '[0.25.0,0.26.0)')
-    jarJar(group: 'ai.djl.pytorch', name: 'pytorch-model-zoo', version: '[0.25.0,0.26.0)')
-    jarJar(group: 'ai.djl.huggingface', name: 'tokenizers', version: '[0.25.0,0.26.0)')
     
-    // Also add to implementation for compile-time access
+    // PyTorch engine - NOT bundled (has native .dll/.so that crash Sinytra)
+    // Will download at runtime from Maven Central when first needed
     implementation 'ai.djl:api:0.25.0'
     implementation 'ai.djl:basicdataset:0.25.0'
-    implementation 'ai.djl.pytorch:pytorch-engine:0.25.0'
-    implementation 'ai.djl.pytorch:pytorch-model-zoo:0.25.0'
-    implementation 'ai.djl.huggingface:tokenizers:0.25.0'
+    implementation('ai.djl.pytorch:pytorch-engine:0.25.0') {
+        exclude group: 'ai.djl.pytorch', module: 'pytorch-native-auto'
+    }
+    runtimeOnly 'ai.djl.pytorch:pytorch-engine:0.25.0'
+    runtimeOnly 'ai.djl.pytorch:pytorch-model-zoo:0.25.0'
+    runtimeOnly 'ai.djl.huggingface:tokenizers:0.25.0'
 }
 
 // Configure the regular jar task with the new name
