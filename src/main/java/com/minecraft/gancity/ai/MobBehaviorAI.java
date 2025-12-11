@@ -77,13 +77,17 @@ public class MobBehaviorAI {
 
     public MobBehaviorAI() {
         initializeDefaultProfiles();
-        initializeAdvancedMLSystems();
+        // Don't initialize ML systems at startup - lazy load when needed
     }
 
     /**
-     * Initialize all advanced machine learning systems
+     * Initialize all advanced machine learning systems (lazy-loaded)
      */
     private void initializeAdvancedMLSystems() {
+        if (mlEnabled) {
+            return; // Already initialized
+        }
+        
         try {
             // Check if DJL is available (optional dependency)
             Class.forName("ai.djl.nn.Block");
