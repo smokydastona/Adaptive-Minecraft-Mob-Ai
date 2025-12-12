@@ -323,7 +323,7 @@ public abstract class MobAIEnhancementMixin {
             
             // Positive reward for damaging target
             if (target != null) {
-                double currentTargetHealth = target.getHealth() / target.getMaxHealth();
+                float currentTargetHealth = target.getHealth() / target.getMaxHealth();
                 if (currentTargetHealth < initialTargetHealth) {
                     reward += (initialTargetHealth - currentTargetHealth) * 10.0;
                     initialTargetHealth = currentTargetHealth;
@@ -331,7 +331,7 @@ public abstract class MobAIEnhancementMixin {
             }
             
             // Negative reward for taking damage
-            double currentMobHealth = mob.getHealth() / mob.getMaxHealth();
+            float currentMobHealth = mob.getHealth() / mob.getMaxHealth();
             if (currentMobHealth < initialMobHealth) {
                 reward -= (initialMobHealth - currentMobHealth) * 5.0;
                 initialMobHealth = currentMobHealth;
