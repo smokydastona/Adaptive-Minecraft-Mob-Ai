@@ -64,18 +64,11 @@ jobs:
     - name: List build artifacts
       run: ls -la build/libs/
     
-    - name: Upload Core Mod JAR
+    - name: Upload Mod JAR
       uses: actions/upload-artifact@v4
       with:
         name: Adaptive-Mob-Ai-${{ steps.version.outputs.VERSION }}
         path: build/libs/Adaptive-Mob-Ai-${{ steps.version.outputs.VERSION }}.jar
-        retention-days: 90
-    
-    - name: Upload ML Libraries JAR
-      uses: actions/upload-artifact@v4
-      with:
-        name: Adaptive-Mob-Ai-ML-Libraries-${{ steps.version.outputs.VERSION }}
-        path: build/libs/Adaptive-Mob-Ai-ML-Libraries-${{ steps.version.outputs.VERSION }}.jar
         retention-days: 90
     
     - name: Create Release
@@ -84,22 +77,22 @@ jobs:
       with:
         files: |
           build/libs/Adaptive-Mob-Ai-${{ steps.version.outputs.VERSION }}.jar
-          build/libs/Adaptive-Mob-Ai-ML-Libraries-${{ steps.version.outputs.VERSION }}.jar
         generate_release_notes: true
         draft: false
         prerelease: false
         body: |
-          ## Installation Options
+          ## Adaptive Mob AI - Machine Learning Enhanced
           
-          ### 🧠 Full ML Features (Recommended)
-          Download **both** JARs and place in `mods/` folder:
-          - `Adaptive-Mob-Ai-${{ steps.version.outputs.VERSION }}.jar` (~500KB - core mod)
-          - `Adaptive-Mob-Ai-ML-Libraries-${{ steps.version.outputs.VERSION }}.jar` (~50MB - neural network libraries)
+          Single JAR with all dependencies included. Just drop in your `mods/` folder!
           
-          ### ⚡ Lightweight Rule-Based AI
-          Download **only** the core mod JAR:
-          - `Adaptive-Mob-Ai-${{ steps.version.outputs.VERSION }}.jar`
+          **Requirements:**
+          - Minecraft 1.20.1
+          - Forge 47.2.0+
           
-          Mobs will use advanced rule-based AI without neural networks. You can add the ML Libraries JAR later to enable true machine learning.
+          **Features:**
+          - Advanced mob combat AI with learning behaviors
+          - Dynamic villager dialogue system
+          - Optional MCA Reborn integration
+          - Full ML capabilities included
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
