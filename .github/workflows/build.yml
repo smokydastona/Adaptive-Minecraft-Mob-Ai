@@ -29,10 +29,11 @@ jobs:
     - name: Get version number
       id: version
       run: |
-        # Read version from gradle.properties instead of auto-generating
-        VERSION=$(grep "mod_version=" gradle.properties | cut -d'=' -f2)
+        # Read base version from gradle.properties and append build number
+        BASE_VERSION=$(grep "mod_version=" gradle.properties | cut -d'=' -f2)
+        VERSION="${BASE_VERSION}.${{ github.run_number }}"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-        echo "Building version: $VERSION"
+        echo "Building version: $VERSION (base: $BASE_VERSION, build: ${{ github.run_number }})"
     
     - name: Verify version
       run: |
