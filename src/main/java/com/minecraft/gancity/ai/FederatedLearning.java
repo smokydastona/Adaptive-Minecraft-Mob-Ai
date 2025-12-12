@@ -712,4 +712,43 @@ public class FederatedLearning {
             return String.format("%s's %s (reward: %.2f)", originalMobType, action, avgReward);
         }
     }
+    
+    // ========================================================================
+    // ADVANCED ML v2.0.0 - Sequence Tracking & Meta-Learning
+    // ========================================================================
+    
+    /**
+     * Submit a combat sequence to Cloudflare for pattern analysis (async wrapper)
+     */
+    public void submitSequenceAsync(String mobType, 
+                                    java.util.List<com.minecraft.gancity.ai.MobBehaviorAI.ActionRecord> sequence,
+                                    String outcome, long duration, String mobId) {
+        if (!syncEnabled || apiClient == null) {
+            return;
+        }
+        
+        apiClient.submitSequenceAsync(mobType, sequence, outcome, duration, mobId)
+            .thenAccept(success -> {
+                if (success) {
+                    LOGGER.debug("Sequence submitted: {} with {} actions", mobType, sequence.size());
+                }
+            })
+            .exceptionally(throwable -> {
+                LOGGER.warn("Sequence submission failed: {}", throwable.getMessage());
+                return null;
+            });
+    }
+    
+    /**
+     * Download meta-learning recommendations from Cloudflare
+     */
+    public java.util.Map<String, java.util.List<com.minecraft.gancity.ai.MobBehaviorAI.MetaLearningRecommendation>> 
+            downloadMetaLearningRecommendations() {
+        
+        if (!syncEnabled || apiClient == null) {
+            return new java.util.HashMap<>();
+        }
+        
+        return apiClient.downloadMetaLearningRecommendations();
+    }
 }

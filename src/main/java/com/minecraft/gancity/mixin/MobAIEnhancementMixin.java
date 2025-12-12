@@ -185,6 +185,10 @@ public abstract class MobAIEnhancementMixin {
             this.combatTicks = 0;
             this.initialMobHealth = mob.getHealth() / mob.getMaxHealth();
             this.initialTargetHealth = target.getHealth() / target.getMaxHealth();
+            
+            // Start sequence tracking for advanced ML
+            behaviorAI.startCombatSequence(mobId);
+            
             selectNextAction();
         }
         
@@ -193,11 +197,29 @@ public abstract class MobAIEnhancementMixin {
             // Combat ended - record outcome for learning
             if (this.target != null) {
                 recordCombatOutcome();
+                
+                // End sequence tracking and submit to Cloudflare
+                String mobType = mob.getType().getDescription().getString().toLowerCase();
+                String outcome = determineOutcome();
+                behaviorAI.endCombatSequence(mobId, mobType, outcome);
             }
             
             this.target = null;
             this.mob.getNavigation().stop();
             this.combatTicks = 0;
+        }
+        
+        /**
+         * Determine combat outcome for sequence analysis
+         */
+        private String determineOutcome() {
+            if (!mob.isAlive()) {
+                return "died";
+            } else if (target != null && !target.isAlive()) {
+                return "success";
+            } else {
+                return "disengaged";
+            }
         }
         
         @Override
@@ -283,7 +305,42 @@ public abstract class MobAIEnhancementMixin {
             }
             
             // AI selects action with contextual difficulty (pass mob entity for environmental context)
+            String previousAction = currentAction;
             currentAction = behaviorAI.selectMobActionWithEntity(mobType, state, mobId, mob);
+            
+            // Track action in sequence (calculate reward based on health changes)
+            if (previousAction != null && !previousAction.equals(currentAction)) {
+                double reward = calculateActionReward();
+                behaviorAI.trackActionInSequence(mobId, previousAction, reward);
+            }
+        }
+        
+        /**
+         * Calculate reward for the action just completed
+         */
+        private double calculateActionReward() {
+            double reward = 0.0;
+            
+            // Positive reward for damaging target
+            if (target != null) {
+                double currentTargetHealth = target.getHealth() / target.getMaxHealth();
+                if (currentTargetHealth < initialTargetHealth) {
+                    reward += (initialTargetHealth - currentTargetHealth) * 10.0;
+                    initialTargetHealth = currentTargetHealth;
+                }
+            }
+            
+            // Negative reward for taking damage
+            double currentMobHealth = mob.getHealth() / mob.getMaxHealth();
+            if (currentMobHealth < initialMobHealth) {
+                reward -= (initialMobHealth - currentMobHealth) * 5.0;
+                initialMobHealth = currentMobHealth;
+            }
+            
+            // Small reward for survival
+            reward += 0.1;
+            
+            return reward;
         }
         
         /**

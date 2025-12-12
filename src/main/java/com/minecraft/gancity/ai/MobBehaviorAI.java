@@ -77,9 +77,52 @@ public class MobBehaviorAI {
     private static final float CORRELATION_THRESHOLD = 5.0f;  // Minimum reward to suggest
     private static final int CORRELATION_SAMPLE_SIZE = 10;  // Samples before suggesting
 
+    // Sequence tracking for advanced ML (v2.0.0)
+    private final Map<String, List<ActionRecord>> activeSequences = new HashMap<>();
+    private final Map<String, Long> combatStartTimes = new HashMap<>();
+    private static final int MAX_SEQUENCE_LENGTH = 10;  // Track up to 10 actions per combat
+    
+    // Meta-learning recommendations cache
+    private final Map<String, List<MetaLearningRecommendation>> metaLearningCache = new HashMap<>();
+    private long lastMetaLearningUpdate = 0;
+    private static final long META_LEARNING_CACHE_TTL = 300000;  // 5 minutes
+
     public MobBehaviorAI() {
         initializeDefaultProfiles();
         // Don't initialize ML systems at startup - lazy load when needed
+    }
+    
+    /**
+     * Action record for sequence tracking
+     */
+    public static class ActionRecord {
+        public final String action;
+        public final double reward;
+        public final long timestamp;
+        
+        public ActionRecord(String action, double reward) {
+            this.action = action;
+            this.reward = reward;
+            this.timestamp = System.currentTimeMillis();
+        }
+    }
+    
+    /**
+     * Meta-learning recommendation from Cloudflare
+     */
+    public static class MetaLearningRecommendation {
+        public final String sourceMob;
+        public final String sourceAction;
+        public final double similarity;
+        public final double confidence;
+        
+        public MetaLearningRecommendation(String sourceMob, String sourceAction, 
+                                          double similarity, double confidence) {
+            this.sourceMob = sourceMob;
+            this.sourceAction = sourceAction;
+            this.similarity = similarity;
+            this.confidence = confidence;
+        }
     }
 
     /**
@@ -1796,6 +1839,98 @@ public class MobBehaviorAI {
             avgDamage = (avgDamage * sampleCount + damage) / (sampleCount + 1);
             avgReward = (avgReward * sampleCount + reward) / (sampleCount + 1);
             sampleCount++;
+        }
+    }
+    
+    // ========================================================================
+    // ADVANCED ML v2.0.0 - Sequence Tracking & Meta-Learning
+    // ========================================================================
+    
+    /**
+     * Start tracking a combat sequence for a mob
+     */
+    public void startCombatSequence(String mobId) {
+        activeSequences.put(mobId, new ArrayList<>());
+        combatStartTimes.put(mobId, System.currentTimeMillis());
+    }
+    
+    /**
+     * Track an action in the current combat sequence
+     */
+    public void trackActionInSequence(String mobId, String action, double reward) {
+        List<ActionRecord> sequence = activeSequences.get(mobId);
+        if (sequence != null && sequence.size() < MAX_SEQUENCE_LENGTH) {
+            sequence.add(new ActionRecord(action, reward));
+        }
+    }
+    
+    /**
+     * End combat sequence and submit to Cloudflare for analysis
+     */
+    public void endCombatSequence(String mobId, String mobType, String outcome) {
+        List<ActionRecord> sequence = activeSequences.remove(mobId);
+        Long startTime = combatStartTimes.remove(mobId);
+        
+        if (sequence != null && sequence.size() >= 2 && startTime != null) {
+            long duration = System.currentTimeMillis() - startTime;
+            
+            // Submit to Cloudflare asynchronously
+            if (federatedLearning != null) {
+                federatedLearning.submitSequenceAsync(mobType, sequence, outcome, duration, mobId);
+            }
+        }
+    }
+    
+    /**
+     * Check meta-learning recommendations for cross-mob tactics
+     * Returns recommended action if available and confidence is high enough
+     */
+    private String checkMetaLearningRecommendations(String mobType, MobState state) {
+        // Refresh cache if needed
+        if (System.currentTimeMillis() - lastMetaLearningUpdate > META_LEARNING_CACHE_TTL) {
+            refreshMetaLearningCache();
+        }
+        
+        List<MetaLearningRecommendation> recommendations = metaLearningCache.get(mobType);
+        if (recommendations == null || recommendations.isEmpty()) {
+            return null;
+        }
+        
+        // Try high-confidence recommendations (>0.3)
+        for (MetaLearningRecommendation rec : recommendations) {
+            if (rec.confidence > 0.3 && random.nextFloat() < rec.confidence) {
+                LOGGER.debug("Using meta-learning: {} tries {} from {}", 
+                    mobType, rec.sourceAction, rec.sourceMob);
+                return rec.sourceAction;
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Refresh meta-learning cache from Cloudflare
+     */
+    private void refreshMetaLearningCache() {
+        if (federatedLearning == null) return;
+        
+        try {
+            Map<String, List<MetaLearningRecommendation>> newCache = 
+                federatedLearning.downloadMetaLearningRecommendations();
+            
+            if (newCache != null && !newCache.isEmpty()) {
+                metaLearningCache.clear();
+                metaLearningCache.putAll(newCache);
+                lastMetaLearningUpdate = System.currentTimeMillis();
+                
+                int totalRecs = newCache.values().stream()
+                    .mapToInt(List::size)
+                    .sum();
+                LOGGER.info("Refreshed meta-learning cache: {} recommendations across {} mob types", 
+                    totalRecs, newCache.size());
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Failed to refresh meta-learning cache: {}", e.getMessage());
         }
     }
 }

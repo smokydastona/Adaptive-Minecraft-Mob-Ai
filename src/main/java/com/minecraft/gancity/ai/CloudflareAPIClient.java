@@ -624,4 +624,100 @@ public class CloudflareAPIClient {
             Thread.currentThread().interrupt();
         }
     }
+    
+    // ========================================================================
+    // ADVANCED ML v2.0.0 - Sequence Tracking & Meta-Learning
+    // ========================================================================
+    
+    /**
+     * Submit a combat sequence to Cloudflare for pattern analysis (async)
+     */
+    public CompletableFuture<Boolean> submitSequenceAsync(String mobType, 
+                                                            java.util.List<com.minecraft.gancity.ai.MobBehaviorAI.ActionRecord> sequence,
+                                                            String outcome, long duration, String mobId) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                // Build sequence JSON
+                JsonObject payload = new JsonObject();
+                payload.addProperty("mobType", mobType);
+                payload.addProperty("finalOutcome", outcome);
+                payload.addProperty("duration", duration);
+                payload.addProperty("mobId", mobId);
+                
+                // Add sequence array
+                com.google.gson.JsonArray sequenceArray = new com.google.gson.JsonArray();
+                for (com.minecraft.gancity.ai.MobBehaviorAI.ActionRecord record : sequence) {
+                    JsonObject actionObj = new JsonObject();
+                    actionObj.addProperty("action", record.action);
+                    actionObj.addProperty("reward", record.reward);
+                    sequenceArray.add(actionObj);
+                }
+                payload.add("sequence", sequenceArray);
+                
+                String jsonPayload = gson.toJson(payload);
+                String response = sendPostRequest("api/submit-sequence", jsonPayload);
+                
+                if (response != null) {
+                    LOGGER.debug("Submitted sequence: {} with {} actions ({})", mobType, sequence.size(), outcome);
+                    return true;
+                }
+                return false;
+                
+            } catch (Exception e) {
+                LOGGER.warn("Failed to submit sequence: {}", e.getMessage());
+                return false;
+            }
+        }, executor);
+    }
+    
+    /**
+     * Download meta-learning recommendations for all mob types
+     */
+    public java.util.Map<String, java.util.List<com.minecraft.gancity.ai.MobBehaviorAI.MetaLearningRecommendation>> 
+            downloadMetaLearningRecommendations() {
+        
+        java.util.Map<String, java.util.List<com.minecraft.gancity.ai.MobBehaviorAI.MetaLearningRecommendation>> result = 
+            new Object2ObjectOpenHashMap<>();
+        
+        try {
+            String response = sendGetRequest("api/meta-learning");
+            if (response == null) {
+                return result;
+            }
+            
+            JsonObject json = gson.fromJson(response, JsonObject.class);
+            if (!json.has("metaLearning")) {
+                return result;
+            }
+            
+            JsonObject metaLearning = json.getAsJsonObject("metaLearning");
+            if (!metaLearning.has("recommendations")) {
+                return result;
+            }
+            
+            com.google.gson.JsonArray recommendations = metaLearning.getAsJsonArray("recommendations");
+            for (com.google.gson.JsonElement elem : recommendations) {
+                JsonObject rec = elem.getAsJsonObject();
+                
+                String targetMob = rec.get("targetMob").getAsString();
+                String sourceMob = rec.get("sourceMob").getAsString();
+                String sourceAction = rec.get("sourceAction").getAsString();
+                double similarity = rec.get("similarity").getAsDouble();
+                double confidence = rec.get("confidence").getAsDouble();
+                
+                result.computeIfAbsent(targetMob, k -> new java.util.ArrayList<>())
+                    .add(new com.minecraft.gancity.ai.MobBehaviorAI.MetaLearningRecommendation(
+                        sourceMob, sourceAction, similarity, confidence
+                    ));
+            }
+            
+            LOGGER.info("Downloaded {} meta-learning recommendations", 
+                result.values().stream().mapToInt(java.util.List::size).sum());
+            
+        } catch (Exception e) {
+            LOGGER.warn("Failed to download meta-learning recommendations: {}", e.getMessage());
+        }
+        
+        return result;
+    }
 }
