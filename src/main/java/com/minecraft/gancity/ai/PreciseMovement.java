@@ -284,6 +284,31 @@ public class PreciseMovement extends MoveControl {
             case PARKOUR:
                 // Auto-jump logic handled above
                 break;
+                
+            case SWIMMING:
+                // Swimming movement adjustments
+                if (mob.isInWater()) {
+                    // Maintain upward movement if needed
+                    if (shouldJump) {
+                        mob.setDeltaMovement(mob.getDeltaMovement().add(0, 0.04, 0));
+                    }
+                }
+                break;
+                
+            case CLIMBING:
+                // Climbing movement adjustments
+                if (mob.onClimbable()) {
+                    // Enhanced vertical movement
+                    mob.setDeltaMovement(mob.getDeltaMovement().multiply(1.0, 1.2, 1.0));
+                }
+                break;
+                
+            case NORMAL:
+            case RETREAT:
+            case COVER:
+            case FLANKING:
+                // No special adjustments needed
+                break;
         }
     }
     
