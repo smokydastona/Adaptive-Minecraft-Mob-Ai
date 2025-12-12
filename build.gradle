@@ -111,7 +111,7 @@ dependencies {
     mlLibs 'ai.djl.huggingface:tokenizers:0.25.0'
 }
 
-// Configure the regular jar task with the new name
+// Configure the regular jar task
 tasks.named('jar', Jar).configure {
     archiveBaseName = 'Adaptive-Mob-Ai'
 }
@@ -147,29 +147,13 @@ tasks.register('mlLibrariesJar', Jar) {
     }
 }
 
-// Configure jarJar to be the final output WITHOUT DJL (lightweight)
+// Configure jarJar - disable it since we only need the reobfuscated JAR
 tasks.named('jarJar').configure {
-    archiveBaseName = 'Adaptive-Mob-Ai'
-    
-    // Enable jarJar to actually bundle the dependencies (FastUtil only, NOT DJL)
-    jarJar.enable()
-    
-    manifest {
-        attributes([
-                'Specification-Title'     : 'Adaptive Mob AI',
-                'Specification-Vendor'    : 'Adaptive Mob AI Team',
-                'Specification-Version'   : '1',
-                'Implementation-Title'    : 'Adaptive-Mob-Ai',
-                'Implementation-Version'  : project.version,
-                'Implementation-Vendor'   : 'Adaptive Mob AI Team',
-                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
-        ])
-    }
+    enabled = false  // Don't create -all.jar, reobfJar is our final output
 }
 
-// Make build task create both JARs
+// Make build task create core JAR and ML libraries JAR
 tasks.named('build').configure {
-    dependsOn 'jarJar'
     dependsOn 'mlLibrariesJar'
 }
 
