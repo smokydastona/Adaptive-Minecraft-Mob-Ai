@@ -85,8 +85,8 @@ public class MobBehaviorAI {
      * Initialize all advanced machine learning systems (lazy-loaded)
      */
     private void initializeAdvancedMLSystems() {
-        if (mlEnabled) {
-            return; // Already initialized
+        if (doubleDQN != null) {
+            return; // Already initialized successfully
         }
         
         try {
@@ -131,12 +131,15 @@ public class MobBehaviorAI {
             
             String mlSystems = buildMLSystemsString();
             LOGGER.info("Advanced ML systems initialized - {}", mlSystems);
+            initializationAttempted = true;
         } catch (ClassNotFoundException e) {
             LOGGER.info("DJL not available, using rule-based AI only (this is normal for development)");
             mlEnabled = false;
+            initializationAttempted = true;
         } catch (Exception e) {
             LOGGER.warn("Failed to initialize ML systems, using rule-based fallback: {}", e.getMessage());
             mlEnabled = false;
+            initializationAttempted = true;
         }
     }
     
@@ -826,6 +829,12 @@ public class MobBehaviorAI {
             return "default_attack";
         }
 
+        // Retry ML initialization on first combat if initial attempt failed
+        if (mlEnabled && doubleDQN == null && !initializationAttempted) {
+            LOGGER.info("First combat detected - attempting deferred ML initialization...");
+            initializeAdvancedMLSystems();
+        }
+
         String selectedAction;
         
         if (mlEnabled && doubleDQN != null) {
@@ -1461,6 +1470,9 @@ public class MobBehaviorAI {
         }
         
         if (doubleDQN == null) {
+            if (!initializationAttempted) {
+                return "ML enabled - initializing on first combat (DJL libraries will load on demand)";
+            }
             return "ML enabled - initializing neural networks (DJL libraries loading...)";
         }
         
