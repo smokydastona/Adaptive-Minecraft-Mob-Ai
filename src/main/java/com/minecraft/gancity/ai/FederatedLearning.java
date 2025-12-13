@@ -82,13 +82,35 @@ public class FederatedLearning {
             // Initialize Cloudflare API client
             this.apiClient = new CloudflareAPIClient(apiEndpoint);
             
+            // ✅ FIX #1: FORCED BOOTSTRAP PULL - Always fetch global model on startup
+            LOGGER.info("Federated Learning enabled - API: {}", apiEndpoint);
+            LOGGER.info("🔄 Performing forced bootstrap pull from global repository...");
+            syncExecutor.schedule(() -> {
+                try {
+                    downloadGlobalTactics();
+                    LOGGER.info("✅ Bootstrap pull completed");
+                } catch (Exception e) {
+                    LOGGER.warn("❌ Bootstrap pull failed (will retry on schedule): {}", e.getMessage());
+                }
+            }, 5, TimeUnit.SECONDS); // 5 second delay to let server finish startup
+            
+            // ✅ FIX #2: FORCED INITIAL UPLOAD - Upload after 2 minutes no matter what
+            syncExecutor.schedule(() -> {
+                LOGGER.info("🔄 Forcing initial upload to establish connection...");
+                forceUpload();
+            }, 2, TimeUnit.MINUTES);
+            
+            // ✅ FIX #3: HEARTBEAT SYNC - Upload metadata every 5 minutes minimum
+            syncExecutor.scheduleAtFixedRate(() -> {
+                heartbeatSync();
+            }, 5, 5, TimeUnit.MINUTES);
+            
             // Schedule periodic sync operations
             syncExecutor.scheduleAtFixedRate(this::downloadGlobalTactics, 
                 PULL_INTERVAL_MS, PULL_INTERVAL_MS, TimeUnit.MILLISECONDS);
             syncExecutor.scheduleAtFixedRate(this::submitLocalTactics, 
                 SYNC_INTERVAL_MS, SYNC_INTERVAL_MS, TimeUnit.MILLISECONDS);
             
-            LOGGER.info("Federated Learning enabled - API: {}", apiEndpoint);
             LOGGER.info("Auto-submit every {} minutes, auto-download every {} minutes", 
                 SYNC_INTERVAL_MS / 60_000, PULL_INTERVAL_MS / 60_000);
         } else {
@@ -198,6 +220,72 @@ public class FederatedLearning {
             
         } catch (Exception e) {
             LOGGER.error("Error downloading tactics: {}", e.getMessage());
+        }
+    }
+    
+    /**
+     * ✅ FIX #2: FORCED UPLOAD - Upload immediately with no thresholds
+     */
+    private void forceUpload() {
+        if (!syncEnabled) return;
+        
+        try {
+            LOGGER.info("💪 FORCED UPLOAD - Establishing initial connection with server");
+            
+            // If we have pending submissions, upload those
+            if (!pendingSubmissions.isEmpty()) {
+                LOGGER.info("📤 Uploading {} pending tactics", pendingSubmissions.size());
+                for (TacticSubmission submission : pendingSubmissions.values()) {
+                    apiClient.submitTactic(
+                        submission.mobType,
+                        submission.action,
+                        submission.getAverageReward(),
+                        submission.getSuccessRate() > 0.5f ? "success" : "failure",
+                        submission.getSuccessRate()
+                    );
+                }
+                pendingSubmissions.clear();
+            } else {
+                // Send a heartbeat ping with dummy data to establish connection
+                LOGGER.info("📡 Sending heartbeat ping to establish connection");
+                apiClient.submitTactic("zombie", "heartbeat_init", 0.5f, "success", 0.5f);
+            }
+            
+            lastSyncTime = System.currentTimeMillis();
+            LOGGER.info("✅ Forced upload completed - connection established");
+            
+        } catch (Exception e) {
+            LOGGER.error("❌ Forced upload failed: {}", e.getMessage());
+        }
+    }
+    
+    /**
+     * ✅ FIX #3: HEARTBEAT SYNC - Upload metadata every interval, no silence allowed
+     */
+    private void heartbeatSync() {
+        if (!syncEnabled) return;
+        
+        try {
+            long currentTime = System.currentTimeMillis();
+            int pendingCount = pendingSubmissions.size();
+            
+            LOGGER.info("💓 HEARTBEAT SYNC - Pending: {}, Last sync: {}min ago", 
+                pendingCount, (currentTime - lastSyncTime) / 60_000);
+            
+            // If we have pending data, upload it
+            if (!pendingSubmissions.isEmpty()) {
+                LOGGER.info("📤 Heartbeat uploading {} tactics", pendingCount);
+                submitLocalTactics();
+            }
+            
+            // Always download to check for updates
+            LOGGER.info("📥 Heartbeat checking for global updates");
+            downloadGlobalTactics();
+            
+            LOGGER.info("✅ Heartbeat sync completed");
+            
+        } catch (Exception e) {
+            LOGGER.error("❌ Heartbeat sync failed: {}", e.getMessage());
         }
     }
     

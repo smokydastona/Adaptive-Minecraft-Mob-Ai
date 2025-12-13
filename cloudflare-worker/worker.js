@@ -55,6 +55,8 @@ export default {
     try {
       // Route requests
       if (url.pathname === '/api/submit-tactics' && request.method === 'POST') {
+        // ✅ VERIFICATION LOG - Track all incoming connections
+        console.log("📥 MODEL UPLOAD FROM", request.headers.get("cf-connecting-ip"));
         return await handleSubmitTactics(request, env, corsHeaders);
       } else if (url.pathname === '/api/submit-sequence' && request.method === 'POST') {
         return await handleSubmitSequence(request, env, corsHeaders);
