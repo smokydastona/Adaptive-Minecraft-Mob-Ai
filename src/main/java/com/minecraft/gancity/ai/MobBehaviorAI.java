@@ -1531,6 +1531,117 @@ public class MobBehaviorAI {
             perfStats
         );
     }
+    
+    /**
+     * Get per-mob learning statistics for player-facing stats display
+     * Shows interaction counts, learned tactics, top performers, tier progress
+     */
+    public Map<String, MobLearningStats> getPerMobStats() {
+        Map<String, MobLearningStats> statsMap = new HashMap<>();
+        
+        // Get stats for common hostile mobs (the ones players encounter most)
+        String[] commonMobs = {"zombie", "skeleton", "creeper", "spider", "enderman", "husk", "stray", "wither_skeleton"};
+        
+        for (String mobType : commonMobs) {
+            MobBehaviorProfile profile = behaviorProfiles.get(mobType);
+            if (profile == null) continue;
+            
+            // Calculate total interactions from success + failure counts
+            int totalInteractions = 0;
+            Map<String, Float> tacticRewards = new HashMap<>();
+            
+            for (String action : profile.getActions()) {
+                int successes = profile.actionSuccessCount.getOrDefault(action, 1);
+                int failures = profile.actionFailureCount.getOrDefault(action, 1);
+                
+                // Subtract initial values (profiles start with 1/1 for each action)
+                int actualSuccesses = Math.max(0, successes - 1);
+                int actualFailures = Math.max(0, failures - 1);
+                int actionInteractions = actualSuccesses + actualFailures;
+                
+                totalInteractions += actionInteractions;
+                
+                // Calculate weighted reward (success rate weighted by usage)
+                if (actionInteractions > 0) {
+                    float successRate = (float) actualSuccesses / actionInteractions;
+                    tacticRewards.put(action, successRate * actionInteractions);
+                }
+            }
+            
+            // Get top 3 tactics by weighted reward
+            List<String> topTactics = tacticRewards.entrySet().stream()
+                .sorted((e1, e2) -> Float.compare(e2.getValue(), e1.getValue()))
+                .limit(3)
+                .map(Map.Entry::getKey)
+                .collect(java.util.stream.Collectors.toList());
+            
+            // Determine best tactic
+            String bestTactic = topTactics.isEmpty() ? "none" : topTactics.get(0);
+            float bestSuccessRate = 0.0f;
+            if (!bestTactic.equals("none")) {
+                int successes = profile.actionSuccessCount.getOrDefault(bestTactic, 1) - 1;
+                int failures = profile.actionFailureCount.getOrDefault(bestTactic, 1) - 1;
+                int total = successes + failures;
+                bestSuccessRate = total > 0 ? (float) successes / total : 0.0f;
+            }
+            
+            // Calculate tier and progress
+            String tier = "ROOKIE";
+            int nextTierThreshold = 50;
+            if (totalInteractions >= 200) {
+                tier = "ELITE";
+                nextTierThreshold = -1; // Max tier
+            } else if (totalInteractions >= 50) {
+                tier = "VETERAN";
+                nextTierThreshold = 200;
+            }
+            
+            statsMap.put(mobType, new MobLearningStats(
+                mobType,
+                totalInteractions,
+                topTactics,
+                bestTactic,
+                bestSuccessRate,
+                tier,
+                nextTierThreshold
+            ));
+        }
+        
+        return statsMap;
+    }
+    
+    /**
+     * Per-mob learning statistics for display
+     */
+    public static class MobLearningStats {
+        public final String mobType;
+        public final int totalInteractions;
+        public final List<String> topTactics;
+        public final String bestTactic;
+        public final float bestSuccessRate;
+        public final String tier;
+        public final int nextTierThreshold; // -1 if max tier
+        
+        public MobLearningStats(String mobType, int totalInteractions, List<String> topTactics,
+                               String bestTactic, float bestSuccessRate, String tier, int nextTierThreshold) {
+            this.mobType = mobType;
+            this.totalInteractions = totalInteractions;
+            this.topTactics = topTactics;
+            this.bestTactic = bestTactic;
+            this.bestSuccessRate = bestSuccessRate;
+            this.tier = tier;
+            this.nextTierThreshold = nextTierThreshold;
+        }
+        
+        public String getTierProgress() {
+            if (nextTierThreshold == -1) {
+                return "MAX (ELITE)";
+            }
+            int remaining = nextTierThreshold - totalInteractions;
+            return String.format("%d/%d to %s", totalInteractions, nextTierThreshold, 
+                nextTierThreshold == 50 ? "VETERAN" : "ELITE");
+        }
+    }
 
     /**
      * Get aggression modifier for a mob type

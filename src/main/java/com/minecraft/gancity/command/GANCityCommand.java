@@ -12,6 +12,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -133,8 +134,68 @@ public class GANCityCommand {
             String mlStats = behaviorAI.getMLStats();
             source.sendSuccess(() -> Component.literal("  " + mlStats), false);
             source.sendSuccess(() -> Component.literal(""), false);
-            source.sendSuccess(() -> Component.literal("  Active mob types: 4 (Zombie, Skeleton, Creeper, Spider)"), false);
-            source.sendSuccess(() -> Component.literal("  Actions per type: 10 tactical behaviors"), false);
+            
+            // Get per-mob learning statistics
+            Map<String, MobBehaviorAI.MobLearningStats> mobStats = behaviorAI.getPerMobStats();
+            
+            if (mobStats.isEmpty()) {
+                source.sendSuccess(() -> Component.literal("  §7No combat data yet - fight some mobs to see AI learning!§r"), false);
+            } else {
+                source.sendSuccess(() -> Component.literal("  §6Per-Mob Learning Progress:§r"), false);
+                
+                // Sort by interaction count (most active first)
+                mobStats.entrySet().stream()
+                    .sorted((e1, e2) -> Integer.compare(e2.getValue().totalInteractions, e1.getValue().totalInteractions))
+                    .forEach(entry -> {
+                        MobBehaviorAI.MobLearningStats stats = entry.getValue();
+                        
+                        // Skip mobs with no interactions
+                        if (stats.totalInteractions == 0) return;
+                        
+                        // Mob header with tier
+                        String mobName = stats.mobType.substring(0, 1).toUpperCase() + stats.mobType.substring(1);
+                        String tierColor = stats.tier.equals("ELITE") ? "§6" : stats.tier.equals("VETERAN") ? "§e" : "§7";
+                        
+                        source.sendSuccess(() -> Component.literal(String.format(
+                            "    §b%s§r [%s%s§r] - %d interactions",
+                            mobName, tierColor, stats.tier, stats.totalInteractions
+                        )), false);
+                        
+                        // Top tactic with success rate
+                        if (!stats.bestTactic.equals("none")) {
+                            String tacticDisplay = stats.bestTactic.replace("_", " ");
+                            String successColor = stats.bestSuccessRate >= 0.7f ? "§a" : 
+                                                stats.bestSuccessRate >= 0.5f ? "§e" : "§c";
+                            
+                            source.sendSuccess(() -> Component.literal(String.format(
+                                "      Best: §f%s§r %s(%.0f%% success)§r",
+                                tacticDisplay, successColor, stats.bestSuccessRate * 100
+                            )), false);
+                        }
+                        
+                        // Tier progress
+                        source.sendSuccess(() -> Component.literal(String.format(
+                            "      Progress: §d%s§r",
+                            stats.getTierProgress()
+                        )), false);
+                        
+                        // Show top 3 tactics if more than one learned
+                        if (stats.topTactics.size() > 1) {
+                            String tacticsStr = stats.topTactics.stream()
+                                .limit(3)
+                                .map(t -> t.replace("_", " "))
+                                .collect(java.util.stream.Collectors.joining("§7, §f"));
+                            
+                            source.sendSuccess(() -> Component.literal(String.format(
+                                "      Known: §f%s§r",
+                                tacticsStr
+                            )), false);
+                        }
+                    });
+            }
+            
+            source.sendSuccess(() -> Component.literal(""), false);
+            source.sendSuccess(() -> Component.literal("  Active mob types: 70+ (All vanilla + modded)"), false);
             source.sendSuccess(() -> Component.literal("  §aLearning: Progressive difficulty with 6 ML systems§r"), false);
         } else {
             source.sendSuccess(() -> Component.literal("  Status: §cDisabled§r"), false);
