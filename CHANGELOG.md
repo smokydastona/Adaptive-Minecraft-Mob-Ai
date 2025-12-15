@@ -2,6 +2,14 @@
 
 All notable changes to MCA AI Enhanced will be documented in this file.
 
+## [1.1.13] - 2025-12-14
+
+### Fixed
+- **Critical**: Mob freezing during federation uploads (blocking HTTP on server thread)
+  - All uploads now use `CompletableFuture.runAsync()` fire-and-forget pattern
+  - Dedicated HTTP executor ensures complete isolation from server thread
+  - Data copying prevents concurrent modification during async upload
+
 ## [1.1.8] - 2025-12-14
 
 ### Added
