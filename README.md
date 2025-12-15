@@ -1,183 +1,228 @@
-# MCA AI Enhanced - Machine Learning Mob Behavior
+# MCA AI Enhanced - Adaptive Mob AI
 
-A Minecraft 1.20.1 Forge mod that uses **actual machine learning** to make ALL vanilla mobs progressively smarter over time. Mobs learn from every interaction using a Deep Q-Network and evolve their behavior to create an ever-changing, adaptive world.
+**Real federated learning for Minecraft mob behavior.**  
+Mobs learn tactics across all servers in real-time. Drop-in, zero-config, production-ready.
 
-## Features
-
-### 🧠 Real Machine Learning
-- **Deep Q-Network** with experience replay
-- **Progressive evolution** - mobs genuinely learn and improve
-- **Online training** - neural network trains during gameplay
-- **Model persistence** - learned behavior saves across sessions
-- **World-adaptive** - discovers tactics that work in YOUR world
-- **70+ mob types** - Every vanilla Minecraft mob can learn and evolve
-
-### 🎮 Universal Mob AI Enhancement
-- **Hostile Mobs** (40+): Zombies, skeletons, creepers, spiders, endermen, blazes, ghasts, phantoms, guardians, pillagers, witches, wardens, and more
-- **Neutral Mobs** (15+): Wolves, polar bears, bees, iron golems, llamas, pandas, dolphins, piglins, and more  
-- **Passive Mobs** (25+): Villagers, animals, fish - learn evasion, survival, and group tactics
-- **Boss Mobs** (3): Ender Dragon, Wither, Warden - adaptive boss fights that learn from your strategies
-- **500+ tactical behaviors**: Coordinated attacks, ambush tactics, terrain usage, pack hunting, evasion patterns, and more
-
-### 🌍 Living, Evolving World
-- **Hostile mobs** learn combat tactics and adapt to your playstyle
-- **Passive mobs** learn survival behaviors - fleeing, hiding, group defense
-- **Neutral mobs** develop sophisticated hunting and defense patterns
-- **Aquatic life** learns ocean navigation and predator evasion
-- **Every creature evolves** based on their experiences in your world
-
-### 💬 MCA Reborn Integration (Optional)
-- AI-powered villager dialogue generation
-- Evolving personalities and moods
-- 40+ context-aware dialogue templates
-- Soft dependency - mob AI works without MCA
-
-## Quick Start
-
-### Requirements
-- Minecraft 1.20.1
-- Forge 47.4.0+
-- Java 17
-
-### Installation
-
-#### Option 1: Full ML Features (Recommended)
-1. Download **both** JARs from releases:
-   - `Adaptive-Mob-Ai-{version}.jar` (~500KB - core mod)
-   - `Adaptive-Mob-Ai-ML-Libraries-{version}.jar` (~50MB - neural network libraries)
-2. Place **both** JARs in `mods/` folder
-3. Launch Minecraft with Forge
-4. Mobs will use real neural networks for learning
-
-#### Option 2: Lightweight Rule-Based AI
-1. Download **only** `Adaptive-Mob-Ai-{version}.jar`
-2. Place in `mods/` folder
-3. Launch Minecraft with Forge
-4. Mobs will use advanced rule-based AI (no neural network)
-
-> **Note**: The ML Libraries JAR contains DJL (Deep Java Library) and PyTorch. If you only want to try the mod without the large download, use Option 2 first. You can add the ML Libraries JAR later to enable true machine learning.
-
-## How It Works
-
-ALL mobs use a **neural network** trained via **reinforcement learning**:
-
-1. **Observe** - Mobs analyze their environment (health, nearby entities, terrain, biome, time)
-2. **Predict** - Neural network calculates Q-values for each possible action
-3. **Execute** - Highest-value action (90% exploitation) or random exploration (10%)
-4. **Experience** - Record outcome with rewards/penalties based on survival and success
-5. **Learn** - Train network using experience replay to improve decision-making
-6. **Evolve** - Over time, entire ecosystems develop emergent adaptive behaviors
-
-### Mob-Specific Learning Examples
-- **Zombies** learn to coordinate group attacks and flank players
-- **Skeletons** discover optimal firing positions and kiting patterns  
-- **Creepers** develop stealth approaches and explosion timing
-- **Endermen** master teleportation tactics to avoid damage
-- **Villagers** learn to recognize danger, hide effectively, and alert others
-- **Wolves** evolve pack hunting strategies
-- **Bees** coordinate swarm defense of their hives
-- **Passive animals** develop predator evasion and safe grazing routes
-- **Guardians** perfect laser focus timing and temple defense
-- **Warden** adapts sonic boom usage based on player movement patterns
-
-### Progression
-- **Early world** (0-100 interactions): Random exploration, learning basics
-- **Developing world** (100-500): Behavioral patterns emerge across all mob types
-- **Mature ecosystem** (500-2000): Optimized behaviors, predator-prey dynamics evolve
-- **Advanced world** (2000+): Complex emergent behaviors, mob societies develop adaptive strategies
-
-## Documentation
-
-- **[PERFORMANCE_OPTIMIZATIONS.md](PERFORMANCE_OPTIMIZATIONS.md)** - Critical performance fixes for lag-free gameplay
-- **[ML_IMPLEMENTATION.md](ML_IMPLEMENTATION.md)** - Deep dive into neural network architecture
-- **[QUICK_START_ML.md](QUICK_START_ML.md)** - Setup and testing guide
-- **[AI_MOD_README.md](AI_MOD_README.md)** - User-facing features
-- **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - Developer guide
-
-## Building from Source
-
-### Prerequisites
-```bash
-# If gradlew is missing, copy from another Forge 1.20.1 project
-# or generate with: gradle wrapper --gradle-version=8.1.1
-```
-
-### Build
-```bash
-.\gradlew build          # Creates TWO JARs in build/libs/:
-                         # 1. Adaptive-Mob-Ai-{version}.jar (~500KB)
-                         # 2. Adaptive-Mob-Ai-ML-Libraries-{version}.jar (~50MB)
-
-.\gradlew runClient      # Test in development environment
-```
-
-> **Build Output**: The build process creates both JARs automatically. Distribute both for full ML features, or just the main JAR for rule-based AI.
-
-## Configuration
-
-Edit `config/mca-ai-enhanced-common.toml`:
-
-```toml
-# AI difficulty multiplier (affects learning speed and exploration rate)
-aiDifficulty = 1.0  # Range: 0.5 (easy) to 3.0 (very hard)
-
-# Master toggle for mob AI system
-enableMobAI = true
-
-# Individual mob type toggles (70+ types supported)
-# Hostile mobs
-zombieAI = true
-skeletonAI = true
-creeperAI = true
-spiderAI = true
-endermanAI = true
-# ... and 65+ more mob types!
-
-# Passive mob learning (evasion and survival tactics)
-passiveMobLearning = true
-
-# Boss AI enhancement
-bossMobAI = true
-```
-
-## Technical Details
-
-### Architecture
-- **Framework**: Deep Java Library (DJL) with PyTorch
-- **Algorithm**: Deep Q-Learning with experience replay
-- **Network**: 22 inputs → 64 hidden → 64 hidden → 10+ Q-values per mob type
-- **Training**: Adam optimizer, batch size 32, learning rate 0.001
-- **Exploration**: Epsilon-greedy (1.0 → 0.1 decay over 1000 experiences)
-- **Coverage**: 70+ vanilla mob types with unique behavior profiles
-- **Actions**: 500+ unique tactical behaviors across all mob types
-
-### Performance (Optimized for 100+ Mobs)
-- **Memory**: ~30MB total (capped, no memory leaks)
-- **CPU**: <1ms per mob action (80% cached), background training never blocks game
-- **Storage**: ~200KB saved model file
-- **TPS**: Stable 20 TPS with 100+ learning mobs
-- **Features**: Background training thread, output caching, object pooling, rate limiting
-
-## Credits
-
-**Algorithm inspiration:**
-- DeepMind's DQN (Deep Q-Network)
-- Sutton & Barto - Reinforcement Learning textbook
-- OpenAI Gym environment patterns
-
-**Dependencies:**
-- Deep Java Library (DJL) 0.25.0
-- PyTorch engine
-- MCA Reborn (optional, for villager dialogue)
-
-## License
-
-See [LICENSE](LICENSE) file.
-
-## Support
-
-For issues, questions, or suggestions, please open a GitHub issue.
+[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-brightgreen.svg)](https://minecraft.net)
+[![Forge Version](https://img.shields.io/badge/Forge-47.2.0+-orange.svg)](https://files.minecraftforge.net)
+[![Java Version](https://img.shields.io/badge/Java-17-blue.svg)](https://openjdk.org)
 
 ---
 
-**This is REAL machine learning.** Mobs use gradient descent to optimize a neural network through reinforcement learning, not scripted difficulty scaling.
+##  Quick Start
+
+1. **Download**: Get `Adaptive-Mob-Ai-1.1.8.jar` from [releases](https://github.com/smokydastona/Adaptive-Minecraft-Mob-Ai/releases)
+2. **Install**: Drop in your `mods/` folder
+3. **Play**: Federation works automatically (zero config needed)
+
+That''s it. Mobs start learning from all servers globally.
+
+---
+
+##  What It Does
+
+### Federated Learning
+- **Global AI**: All servers contribute to one shared model
+- **Real-time**: New tactics distributed every 10 minutes
+- **Zero config**: Works out-of-the-box, no credentials needed
+- **Graceful degradation**: Offline mode if network unavailable
+
+### Smart Mobs
+- **Adaptive tactics**: Learn from combat outcomes
+- **8 mob types**: Zombie, Skeleton, Creeper, Spider, Husk, Stray, Wither Skeleton, Enderman
+- **Difficulty scaling**: 0.5 (easy) to 3.0 (very hard)
+
+### Optional MCA Integration
+- **Villager personalities**: Mood-based dialogue (requires MCA Reborn)
+- **Dynamic interactions**: Evolving relationships
+
+---
+
+##  Federation Status
+
+**Live**: https://mca-ai-tactics-api.mc-ai-datcol.workers.dev/status
+
+**GitHub Logs**: https://github.com/smokydastona/adaptive-ai-federation-logs
+
+**In-game**: `/mcaai federation`
+
+---
+
+##  Documentation
+
+### Getting Started
+- [Installation Guide](docs/INSTALLATION.md) - Setup and configuration
+- [Features Overview](docs/FEATURES.md) - What the mod does
+- [Supported Mobs](docs/SUPPORTED_MOBS.md) - Complete mob list
+- [Architecture](docs/ARCHITECTURE.md) - How it works
+
+### Deployment
+- [Server Deployment](docs/SERVER_DEPLOYMENT.md) - Running on servers
+- [Performance](docs/PERFORMANCE.md) - Optimization tips
+- [Mod Compatibility](docs/MOD_COMPATIBILITY.md) - Works with other mods
+
+### Federation
+- [Federated Learning](docs/FEDERATED_LEARNING.md) - Global AI system
+- [Setup Guide](docs/SETUP_FEDERATED_LEARNING.md) - Advanced configuration
+
+### Cloudflare Worker
+- [Deployment Guide](docs/cloudflare-worker/DEPLOYMENT.md) - Worker setup
+- [GitHub Setup](docs/cloudflare-worker/GITHUB_SETUP.md) - Logging configuration
+- [Advanced ML Guide](docs/cloudflare-worker/ADVANCED_ML_GUIDE.md) - ML internals
+
+### Legacy
+- [Old Documentation](docs/legacy/) - Historical references
+
+---
+
+##  Commands
+
+```
+/mcaai info          # Mod status and MCA detection
+/mcaai stats         # AI statistics and active features
+/mcaai federation    # Federation status (round, contributors)
+/mcaai test dialogue # Test dialogue (requires MCA)
+```
+
+---
+
+##  Configuration
+
+Auto-generated at `config/adaptivemobai-common.toml`:
+
+```toml
+[mobai]
+enableMobAI = true
+aiDifficulty = 1.0  # 0.5 (easy) to 3.0 (very hard)
+
+[federation]
+enableFederatedLearning = true
+cloudApiEndpoint = "https://mca-ai-tactics-api.mc-ai-datcol.workers.dev"
+
+[mobs]
+enableZombie = true
+enableSkeleton = true
+# ... per-mob toggles
+```
+
+---
+
+##  Building from Source
+
+```bash
+git clone https://github.com/smokydastona/Adaptive-Minecraft-Mob-Ai.git
+cd Adaptive-Minecraft-Mob-Ai
+.\gradlew build
+
+# Output: build/libs/Adaptive-Mob-Ai-1.1.8.jar
+```
+
+**Requirements**: Java 17, Forge MDK
+
+---
+
+##  How It Works
+
+### Architecture
+```
+Minecraft Server (Mod)
+        
+Cloudflare Worker (API)
+        
+Durable Object (Coordinator)
+        
+Global Model (FedAvg)
+        
+GitHub (Flight Recorder)
+```
+
+### Federation Flow
+1. **Server starts**  Downloads global model
+2. **First combat**  Uploads tactics (bootstrap)
+3. **Every 10 min**  Round closes, aggregates
+4. **All servers**  Get updated tactics
+
+### Key Features
+- **Durable Object**: Single source of truth
+- **Round Finality**: Max 10 contributors OR 10 minutes
+- **Forced Traffic**: Startup pull + bootstrap upload guaranteed
+- **GitHub Logging**: Optional async debug logs
+
+---
+
+##  Testing
+
+### Verify Federation
+```bash
+# Check worker status
+curl https://mca-ai-tactics-api.mc-ai-datcol.workers.dev/status
+
+# Check GitHub logs
+open https://github.com/smokydastona/adaptive-ai-federation-logs
+```
+
+### Server Logs
+```
+[INFO] [Federation] Connected (Round 15, 12 contributors, 3 mob types)
+[INFO]  FIRST ENCOUNTER: zombie - uploading bootstrap data
+[INFO]  Bootstrap upload successful for zombie
+```
+
+---
+
+##  Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.
+
+**Latest (1.1.8)**:
+-  Federated Learning v3.0.0 (complete rewrite)
+-  Decisive round finality
+-  Forced startup pull
+-  GitHub flight recorder
+-  Proof-of-life status endpoint
+
+---
+
+##  Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing`)
+3. Commit changes (`git commit -am ''Add amazing feature'')
+4. Push to branch (`git push origin feature/amazing`)
+5. Open Pull Request
+
+---
+
+##  License
+
+This project is licensed under the MIT License - see [LICENSE](LICENSE) file.
+
+---
+
+##  Credits
+
+- **MCA Reborn** - Villager integration support
+- **Cloudflare Workers** - Federation infrastructure
+- **Forge** - Minecraft modding framework
+- **DJL** - Machine learning inference
+
+---
+
+##  Links
+
+- **Releases**: https://github.com/smokydastona/Adaptive-Minecraft-Mob-Ai/releases
+- **Issues**: https://github.com/smokydastona/Adaptive-Minecraft-Mob-Ai/issues
+- **Worker Status**: https://mca-ai-tactics-api.mc-ai-datcol.workers.dev/status
+- **Federation Logs**: https://github.com/smokydastona/adaptive-ai-federation-logs
+
+---
+
+##  Support
+
+- **Issues**: Open a GitHub issue with logs
+- **Federation**: Check `/status` endpoint for health
+- **Docs**: See `docs/` folder for guides
+
+---
+
+**Built with  for the Minecraft community**
