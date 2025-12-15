@@ -167,24 +167,76 @@ export default {
             'Duplicate submission prevention',
             'Forced bootstrap support',
             'Heartbeat keep-alive',
-            'Round-based model versioning'
+            'Round-based model versioning',
+            'GitHub observability logging'
           ],
           endpoints: {
             'GET /health': 'Worker health check',
             'GET /status': 'Federation status (round, contributors, models)',
             'POST /api/upload': 'Upload model (include bootstrap=true for first upload)',
             'GET /api/global': 'Download global model (optionally filter by mobType)',
-            'POST /api/heartbeat': 'Heartbeat ping (serverId + activeMobs)'
+            'POST /api/heartbeat': 'Heartbeat ping (serverId + activeMobs)',
+            'POST /admin/init-github': 'Test GitHub logging (admin only)'
           },
           clientRequirements: {
             startupPull: 'MUST call GET /api/global on server start (unconditional)',
             firstEncounter: 'MUST call POST /api/upload with bootstrap=true on first combat',
             heartbeat: 'MUST call POST /api/heartbeat every 5-10 minutes'
+          },
+          observability: {
+            github: env.GITHUB_TOKEN ? 'enabled' : 'disabled',
+            repo: env.GITHUB_REPO || 'not configured'
           }
         }), {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
+      }
+
+      // Admin endpoint - initialize GitHub logging
+      if (url.pathname === '/admin/init-github' && request.method === 'POST') {
+        if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) {
+          return new Response(JSON.stringify({
+            error: 'GitHub not configured',
+            message: 'Set GITHUB_TOKEN secret and GITHUB_REPO var in wrangler.toml'
+          }), {
+            status: 503,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        try {
+          const { GitHubLogger } = await import('./src/GitHubLogger.js');
+          const logger = new GitHubLogger(env.GITHUB_TOKEN, env.GITHUB_REPO);
+          
+          // Test write
+          await logger.logStatus({
+            test: true,
+            message: 'GitHub logging initialized',
+            timestamp: new Date().toISOString(),
+            worker: 'healthy',
+            version: '3.0.0'
+          });
+
+          return new Response(JSON.stringify({
+            success: true,
+            message: 'GitHub logging test successful',
+            repo: env.GITHUB_REPO,
+            file: 'status/latest.json'
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        } catch (error) {
+          return new Response(JSON.stringify({
+            error: 'GitHub logging test failed',
+            message: error.message,
+            note: 'Check GITHUB_TOKEN permissions and GITHUB_REPO exists'
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
       }
 
       // 404 for unknown paths

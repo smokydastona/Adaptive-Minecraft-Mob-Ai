@@ -11,6 +11,8 @@
  * - Reject late/duplicate submissions
  */
 
+import { GitHubLogger } from './GitHubLogger.js';
+
 export class FederationCoordinator {
   constructor(state, env) {
     this.state = state;
@@ -22,6 +24,9 @@ export class FederationCoordinator {
     this.models = null;
     this.globalModel = null;
     this.lastAggregation = null;
+    
+    // GitHub logger (observability only - never blocks federation)
+    this.logger = null;
   }
 
   async fetch(request) {
@@ -62,6 +67,14 @@ export class FederationCoordinator {
     this.models = await this.state.storage.get('models') || new Map();
     this.globalModel = await this.state.storage.get('globalModel') || null;
     this.lastAggregation = await this.state.storage.get('lastAggregation') || Date.now();
+
+    // Initialize GitHub logger if token is available
+    if (this.env.GITHUB_TOKEN && this.env.GITHUB_REPO) {
+      this.logger = new GitHubLogger(this.env.GITHUB_TOKEN, this.env.GITHUB_REPO);
+      console.log(`📝 GitHub logging enabled: ${this.env.GITHUB_REPO}`);
+    } else {
+      console.log(`⚠️ GitHub logging disabled (no token/repo configured)`);
+    }
 
     console.log(`🎯 Coordinator initialized: Round ${this.currentRound}, ${this.contributors.size} contributors`);
   }
@@ -222,6 +235,30 @@ export class FederationCoordinator {
 
     // Persist to GitHub via KV
     await this.publishGlobalModel();
+
+    // LOG TO GITHUB (side effect only - never blocks federation)
+    if (this.logger) {
+      // Extract mob types and stats for the log
+      const mobTypes = Object.keys(aggregated);
+      const modelStats = {};
+      for (const [mobType, tactics] of Object.entries(aggregated)) {
+        modelStats[mobType] = {
+          actionCount: Object.keys(tactics).length,
+          totalExperiences: Object.values(tactics).reduce((sum, t) => sum + (t.count || 0), 0)
+        };
+      }
+
+      // Log round completion (async, non-blocking)
+      this.logger.logRound({
+        round: this.currentRound,
+        timestamp: new Date(this.globalModel.timestamp).toISOString(),
+        contributors: this.models.size,
+        mobTypes,
+        modelStats
+      }).catch(err => {
+        // Silent failure - already logged in GitHubLogger
+      });
+    }
 
     // Increment round and clear models
     this.currentRound++;

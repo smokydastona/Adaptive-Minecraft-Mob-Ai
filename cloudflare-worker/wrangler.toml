@@ -30,16 +30,23 @@ crons = ["0 * * * *"]  # Every hour at :00
 
 # Environment variables
 [vars]
-GITHUB_REPO = "smokydastona/Minecraft-machine-learned-collected"
+GITHUB_REPO = "smokydastona/adaptive-ai-federation-logs"
 GITHUB_BRANCH = "main"
 
 # Secrets (set with: wrangler secret put GITHUB_TOKEN)
 # GITHUB_TOKEN = "your-github-personal-access-token"
 # 
-# To enable GitHub backup:
+# To enable GitHub logging (observability only):
 # 1. Create GitHub Personal Access Token with 'repo' scope
-# 2. Run: wrangler secret put GITHUB_TOKEN
-# 3. Paste your token when prompted
+# 2. Ensure token has write access to: smokydastona/adaptive-ai-federation-logs
+# 3. Run: wrangler secret put GITHUB_TOKEN
+# 4. Paste your token when prompted
 # 
-# The worker will then automatically backup tactics to:
-# https://github.com/smokydastona/Minecraft-machine-learned-collected/tree/main/federated-data
+# The worker will then log federation rounds to:
+# https://github.com/smokydastona/adaptive-ai-federation-logs
+#
+# CRITICAL: GitHub is OBSERVABILITY ONLY
+# - Logs are written AFTER aggregation completes
+# - Failures never block federation logic (wrapped in try/catch)
+# - GitHub is never read from (write-only flight recorder)
+# - Federation truth lives in Durable Object only
