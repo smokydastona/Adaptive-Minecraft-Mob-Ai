@@ -33,6 +33,13 @@ public class TacticalActionSpace {
         COUNTER_ATTACK("counter_attack", "Block/dodge then immediately strike"),
         FEINT_RETREAT("feint_retreat", "Fake retreat to bait player forward"),
         
+        // Cooperative tactics (require 2+ allies)
+        COORDINATE_FLANK("coordinate_flank", "Allies attack from different angles simultaneously"),
+        PINCER_ATTACK("pincer_attack", "Surround player with coordinated positioning"),
+        DISTRACT_AND_STRIKE("distract_and_strike", "One ally distracts while others attack"),
+        ROTATING_PRESSURE("rotating_pressure", "Take turns engaging to maintain constant pressure"),
+        PROTECT_WEAK_ALLY("protect_weak_ally", "Shield low-health allies from player"),
+        
         // Utility tactics
         USE_TERRAIN("use_terrain", "Leverage environmental obstacles"),
         WAIT_FOR_OPENING("wait_for_opening", "Patient, defensive positioning"),
@@ -70,13 +77,17 @@ public class TacticalActionSpace {
         public final boolean targetHasShield;
         public final boolean targetLowHealth;    // < 30%
         public final boolean selfLowHealth;      // < 30%
-        public final int nearbyAllies;           // other mobs nearby
+        public final int nearbyAllies;           // other mobs nearby (within 8 blocks)
+        public final int alliesAttackingTarget;  // allies currently fighting same target
+        public final boolean allyNeedsHelp;      // nearby ally at low health
         public final boolean targetInCooldown;   // shield/weapon on cooldown
         public final boolean hasTerrainCover;    // obstacles nearby
+        public final boolean playerSurrounded;   // allies on multiple sides of player
         
         public TacticalState(float healthRatio, float targetHealthRatio, float distanceToTarget,
                            boolean targetHasShield, boolean targetLowHealth, boolean selfLowHealth,
-                           int nearbyAllies, boolean targetInCooldown, boolean hasTerrainCover) {
+                           int nearbyAllies, int alliesAttackingTarget, boolean allyNeedsHelp,
+                           boolean targetInCooldown, boolean hasTerrainCover, boolean playerSurrounded) {
             this.healthRatio = healthRatio;
             this.targetHealthRatio = targetHealthRatio;
             this.distanceToTarget = distanceToTarget;
@@ -84,8 +95,11 @@ public class TacticalActionSpace {
             this.targetLowHealth = targetLowHealth;
             this.selfLowHealth = selfLowHealth;
             this.nearbyAllies = nearbyAllies;
+            this.alliesAttackingTarget = alliesAttackingTarget;
+            this.allyNeedsHelp = allyNeedsHelp;
             this.targetInCooldown = targetInCooldown;
             this.hasTerrainCover = hasTerrainCover;
+            this.playerSurrounded = playerSurrounded;
         }
         
         /**
@@ -100,12 +114,34 @@ public class TacticalActionSpace {
             boolean targetLowHealth = targetHealthRatio < 0.3f;
             boolean selfLowHealth = healthRatio < 0.3f;
             
-            // Count nearby allies (8 block radius)
-            int nearbyAllies = (int) mob.level().getEntitiesOfClass(
+            // Get all nearby allies (8 block radius)
+            List<Mob> allyList = mob.level().getEntitiesOfClass(
                 Mob.class,
                 mob.getBoundingBox().inflate(8.0),
-                m -> m != mob && !m.isDeadOrDying()
-            ).size();
+                m -> m != mob && !m.isDeadOrDying() && m.getType() == mob.getType()
+            );
+            int nearbyAllies = allyList.size();
+            
+            // Count allies actively fighting the same target
+            int alliesAttackingTarget = (int) allyList.stream()
+                .filter(ally -> ally.getTarget() == target)
+                .count();
+            
+            // Check if any ally needs help (low health)
+            boolean allyNeedsHelp = allyList.stream()
+                .anyMatch(ally -> ally.getHealth() / ally.getMaxHealth() < 0.3f);
+            
+            // Check if player is surrounded (allies on opposite sides)
+            boolean playerSurrounded = false;
+            if (nearbyAllies >= 2) {
+                Vec3 mobToPlayer = target.position().subtract(mob.position()).normalize();
+                playerSurrounded = allyList.stream()
+                    .anyMatch(ally -> {
+                        Vec3 allyToPlayer = target.position().subtract(ally.position()).normalize();
+                        double angle = mobToPlayer.dot(allyToPlayer);
+                        return angle < -0.5; // Roughly opposite sides (>120 degrees)
+                    });
+            }
             
             // Simple cooldown detection (if player hasn't attacked in 0.5s)
             boolean targetInCooldown = target.getAttackStrengthScale(0.5f) < 0.9f;
@@ -116,7 +152,8 @@ public class TacticalActionSpace {
             return new TacticalState(
                 healthRatio, targetHealthRatio, distance,
                 targetHasShield, targetLowHealth, selfLowHealth,
-                nearbyAllies, targetInCooldown, hasTerrainCover
+                nearbyAllies, alliesAttackingTarget, allyNeedsHelp,
+                targetInCooldown, hasTerrainCover, playerSurrounded
             );
         }
         
@@ -269,6 +306,115 @@ public class TacticalActionSpace {
                     mob.getNavigation().moveTo(target, 1.0);
                 }
                 break;
+            
+            // ==================== COOPERATIVE TACTICS ====================
+            
+            case COORDINATE_FLANK:
+                // Approach from angles relative to allies
+                List<Mob> allies = getNearbyAllies(mob);
+                if (!allies.isEmpty()) {
+                    // Get ally positions relative to target
+                    Vec3 targetPos = target.position();
+                    Vec3 avgAllyAngle = Vec3.ZERO;
+                    for (Mob ally : allies) {
+                        Vec3 allyToTarget = targetPos.subtract(ally.position()).normalize();
+                        avgAllyAngle = avgAllyAngle.add(allyToTarget);
+                    }
+                    avgAllyAngle = avgAllyAngle.normalize();
+                    
+                    // Approach from perpendicular angle to allies
+                    Vec3 flankDirection = new Vec3(-avgAllyAngle.z, 0, avgAllyAngle.x);
+                    Vec3 flankPos = targetPos.add(flankDirection.scale(3));
+                    mob.getNavigation().moveTo(flankPos.x, flankPos.y, flankPos.z, 1.3);
+                } else {
+                    mob.getNavigation().moveTo(target, 1.2);
+                }
+                break;
+                
+            case PINCER_ATTACK:
+                // Surround player with coordinated positioning
+                List<Mob> pincerAllies = getNearbyAllies(mob);
+                if (pincerAllies.size() >= 1) {
+                    // Divide circle around player based on ally count
+                    int totalMobs = pincerAllies.size() + 1;
+                    int myIndex = 0; // This mob's position in formation
+                    double angleStep = (Math.PI * 2) / totalMobs;
+                    double myAngle = angleStep * myIndex;
+                    
+                    Vec3 targetPos = target.position();
+                    Vec3 offset = new Vec3(Math.cos(myAngle) * 3, 0, Math.sin(myAngle) * 3);
+                    Vec3 pincerPos = targetPos.add(offset);
+                    mob.getNavigation().moveTo(pincerPos.x, pincerPos.y, pincerPos.z, 1.2);
+                } else {
+                    mob.getNavigation().moveTo(target, 1.2);
+                }
+                break;
+                
+            case DISTRACT_AND_STRIKE:
+                // One distracts, others attack (alternate roles every 5 seconds)
+                List<Mob> teamAllies = getNearbyAllies(mob);
+                if (!teamAllies.isEmpty()) {
+                    boolean isDistractor = (mob.tickCount / 100) % 2 == 0; // Swap roles every 5s
+                    if (isDistractor) {
+                        // Distract: Stay in front, dodge a lot
+                        Vec3 frontPos = target.position().add(target.getLookAngle().scale(-3));
+                        mob.getNavigation().moveTo(frontPos.x, frontPos.y, frontPos.z, 1.4);
+                    } else {
+                        // Attacker: Approach from sides/back
+                        Vec3 behindPlayer = target.position().subtract(target.getLookAngle().scale(2));
+                        mob.getNavigation().moveTo(behindPlayer.x, behindPlayer.y, behindPlayer.z, 1.3);
+                    }
+                } else {
+                    mob.getNavigation().moveTo(target, 1.2);
+                }
+                break;
+                
+            case ROTATING_PRESSURE:
+                // Take turns engaging to maintain constant pressure
+                List<Mob> rotatingAllies = getNearbyAllies(mob);
+                if (!rotatingAllies.isEmpty()) {
+                    // Each mob attacks for 3 seconds, then retreats for 2 seconds
+                    int cycleTime = 5 * 20; // 5 seconds in ticks
+                    int myTurn = mob.getId() % rotatingAllies.size();
+                    int currentPhase = (mob.tickCount / cycleTime) % rotatingAllies.size();
+                    
+                    if (myTurn == currentPhase) {
+                        // My turn - aggressive
+                        mob.getNavigation().moveTo(target, 1.5);
+                    } else {
+                        // Not my turn - maintain distance
+                        float rotatingDist = mob.distanceTo(target);
+                        if (rotatingDist < 6) {
+                            Vec3 away = mob.position().subtract(target.position()).normalize();
+                            Vec3 waitPos = mob.position().add(away.scale(2));
+                            mob.getNavigation().moveTo(waitPos.x, waitPos.y, waitPos.z, 0.9);
+                        }
+                    }
+                } else {
+                    mob.getNavigation().moveTo(target, 1.2);
+                }
+                break;
+                
+            case PROTECT_WEAK_ALLY:
+                // Shield low-health allies from player
+                List<Mob> protectAllies = getNearbyAllies(mob);
+                Mob weakAlly = null;
+                for (Mob ally : protectAllies) {
+                    if (ally.getHealth() / ally.getMaxHealth() < 0.3f) {
+                        weakAlly = ally;
+                        break;
+                    }
+                }
+                
+                if (weakAlly != null) {
+                    // Position between player and weak ally
+                    Vec3 playerToWeakAlly = weakAlly.position().subtract(target.position()).normalize();
+                    Vec3 shieldPos = target.position().add(playerToWeakAlly.scale(2));
+                    mob.getNavigation().moveTo(shieldPos.x, shieldPos.y, shieldPos.z, 1.3);
+                } else {
+                    mob.getNavigation().moveTo(target, 1.1);
+                }
+                break;
                 
             case DEFAULT_MELEE:
             default:
@@ -276,6 +422,17 @@ public class TacticalActionSpace {
                 mob.getNavigation().moveTo(target, 1.0);
                 break;
         }
+    }
+    
+    /**
+     * Get nearby allies of the same type
+     */
+    private static List<Mob> getNearbyAllies(Mob mob) {
+        return mob.level().getEntitiesOfClass(
+            Mob.class,
+            mob.getBoundingBox().inflate(8.0),
+            m -> m != mob && !m.isDeadOrDying() && m.getType() == mob.getType()
+        );
     }
     
     /**
@@ -301,6 +458,9 @@ public class TacticalActionSpace {
                     TacticalAction.CALL_REINFORCEMENTS,
                     TacticalAction.OVERHEAD_COMBO,
                     TacticalAction.EXPLOIT_WEAKNESS,
+                    TacticalAction.COORDINATE_FLANK,      // Cooperative
+                    TacticalAction.PINCER_ATTACK,         // Cooperative
+                    TacticalAction.ROTATING_PRESSURE,     // Cooperative
                     TacticalAction.DEFAULT_MELEE
                 );
                 
@@ -311,6 +471,8 @@ public class TacticalActionSpace {
                     TacticalAction.DODGE_WEAVE,
                     TacticalAction.USE_TERRAIN,
                     TacticalAction.RETREAT_AND_HEAL,
+                    TacticalAction.DISTRACT_AND_STRIKE,   // Cooperative (one distracts, others shoot)
+                    TacticalAction.PROTECT_WEAK_ALLY,     // Cooperative (cover retreating allies)
                     TacticalAction.DEFAULT_MELEE
                 );
                 

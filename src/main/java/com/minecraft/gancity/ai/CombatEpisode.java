@@ -42,7 +42,7 @@ public class CombatEpisode {
         
         public EpisodeOutcome(boolean mobKilledPlayer, boolean playerKilledMob,
                             float totalDamageDealt, float totalDamageTaken, 
-                            int durationTicks) {
+                            int durationTicks, List<TacticalSample> samples) {
             this.mobKilledPlayer = mobKilledPlayer;
             this.playerKilledMob = playerKilledMob;
             this.totalDamageDealt = totalDamageDealt;
@@ -50,10 +50,10 @@ public class CombatEpisode {
             this.durationTicks = durationTicks;
             
             // Calculate episode reward
-            this.episodeReward = calculateEpisodeReward();
+            this.episodeReward = calculateEpisodeReward(samples);
         }
         
-        private float calculateEpisodeReward() {
+        private float calculateEpisodeReward(List<TacticalSample> samples) {
             float reward = 0;
             
             // Win/loss outcome
@@ -72,7 +72,33 @@ public class CombatEpisode {
                 reward += 20.0f;
             }
             
+            // COOPERATIVE REWARDS: Bonus for using cooperative tactics with allies present
+            long cooperativeTactics = samples.stream()
+                .filter(s -> isCooperativeTactic(s.action) && s.state.nearbyAllies >= 1)
+                .count();
+            if (cooperativeTactics > 0) {
+                // Reward successful cooperation
+                if (mobKilledPlayer) {
+                    reward += cooperativeTactics * 5.0f;  // Bonus for coordinated kills
+                }
+                
+                // Extra bonus if player was surrounded
+                boolean playerSurrounded = samples.stream()
+                    .anyMatch(s -> s.state.playerSurrounded);
+                if (playerSurrounded && mobKilledPlayer) {
+                    reward += 30.0f;  // Major bonus for successful pack tactics
+                }
+            }
+            
             return reward;
+        }
+        
+        private boolean isCooperativeTactic(TacticalActionSpace.TacticalAction action) {
+            return action == TacticalActionSpace.TacticalAction.COORDINATE_FLANK ||
+                   action == TacticalActionSpace.TacticalAction.PINCER_ATTACK ||
+                   action == TacticalActionSpace.TacticalAction.DISTRACT_AND_STRIKE ||
+                   action == TacticalActionSpace.TacticalAction.ROTATING_PRESSURE ||
+                   action == TacticalActionSpace.TacticalAction.PROTECT_WEAK_ALLY;
         }
         
         public boolean wasSuccessful() {
@@ -138,7 +164,8 @@ public class CombatEpisode {
             playerKilledMob,
             totalDamageDealt,
             totalDamageTaken,
-            durationTicks
+            durationTicks,
+            samples
         );
     }
     
