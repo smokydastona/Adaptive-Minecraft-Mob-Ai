@@ -428,10 +428,10 @@ public class TacticalActionSpace {
                 // Melee mobs advance aggressively if ranged allies are providing cover fire
                 // Ranged mobs maintain distance and shoot while melee allies engage
                 List<Mob> comboAllies = getNearbyAllies(mob);
-                boolean hasRangedAlly = comboAllies.stream().anyMatch(m -> m instanceof Skeleton || m instanceof Witch || m instanceof Pillager);
-                boolean hasMeleeAlly = comboAllies.stream().anyMatch(m -> m instanceof Zombie || m instanceof Spider);
+                boolean hasRangedAlly = comboAllies.stream().anyMatch(m -> isRangedMob(m));
+                boolean hasMeleeAlly = comboAllies.stream().anyMatch(m -> isMeleeMob(m));
                 
-                if (mob instanceof Skeleton || mob instanceof Witch || mob instanceof Pillager) {
+                if (isRangedMob(mob)) {
                     // I'm ranged - keep distance, provide suppressing fire
                     float comboDist = mob.distanceTo(target);
                     if (comboDist < 8 && hasMeleeAlly) {
@@ -458,13 +458,13 @@ public class TacticalActionSpace {
                 // Expendable mobs (creepers, low-health) draw player attention for assassins
                 List<Mob> sacrificeAllies = getNearbyAllies(mob);
                 boolean hasAssassin = sacrificeAllies.stream().anyMatch(m -> 
-                    m instanceof Spider || m.getHealth() > mob.getHealth() * 1.5f
+                    isFastMob(m) || m.getHealth() > mob.getHealth() * 1.5f
                 );
                 
                 if (hasAssassin) {
                     // I'm the distraction - be loud and obvious
                     mob.getNavigation().moveTo(target, 1.8);  // Aggressive rush
-                    if (mob instanceof Creeper && mob.distanceTo(target) < 3) {
+                    if (isExpendableMob(mob) && mob.distanceTo(target) < 3) {
                         // Prime explosion as distraction (vanilla behavior handles this)
                     }
                 } else {
@@ -478,14 +478,14 @@ public class TacticalActionSpace {
                 List<Mob> ambushAllies = getNearbyAllies(mob);
                 Mob heavyHitter = null;
                 for (Mob ally : ambushAllies) {
-                    if ((ally instanceof Zombie || ally instanceof Ravager) && 
+                    if (isTankMob(ally) && 
                         ally.distanceTo(target) > 8) {
                         heavyHitter = ally;
                         break;
                     }
                 }
                 
-                if (heavyHitter != null && (mob instanceof Spider || mob instanceof Creeper)) {
+                if (heavyHitter != null && isFastMob(mob)) {
                     // I'm fast - position to push player toward heavy ally
                     Vec3 playerToHeavy = heavyHitter.position().subtract(target.position()).normalize();
                     Vec3 herdPos = target.position().subtract(playerToHeavy.scale(3));  // Get on opposite side
@@ -498,9 +498,9 @@ public class TacticalActionSpace {
             case LAYERED_DEFENSE:
                 // Form tactical layers: tanks front, ranged back, support middle
                 List<Mob> layerAllies = getNearbyAllies(mob);
-                boolean isTank = mob instanceof Zombie || mob instanceof Ravager;
-                boolean isRanged = mob instanceof Skeleton || mob instanceof Witch || mob instanceof Pillager;
-                boolean isSupport = mob instanceof Spider || mob instanceof Creeper;
+                boolean isTank = isTankMob(mob);
+                boolean isRanged = isRangedMob(mob);
+                boolean isSupport = isSupportMob(mob);
                 
                 float playerDist = mob.distanceTo(target);
                 
@@ -557,22 +557,69 @@ public class TacticalActionSpace {
     
     /**
      * Check if a mob is a hostile monster (can coordinate with other hostiles)
+     * Uses string matching to avoid ClassNotFoundException issues
      */
     private static boolean isHostileMob(Mob mob) {
-        return mob instanceof Zombie || 
-               mob instanceof Skeleton || 
-               mob instanceof Spider || 
-               mob instanceof Creeper || 
-               mob instanceof Witch || 
-               mob instanceof Vindicator || 
-               mob instanceof Pillager || 
-               mob instanceof Evoker ||
-               mob instanceof Ravager ||
-               mob instanceof Drowned ||
-               mob instanceof Husk ||
-               mob instanceof Stray ||
-               mob instanceof WitherSkeleton ||
-               mob instanceof Zoglin;
+        String mobType = mob.getType().toString().toLowerCase();
+        return mobType.contains("zombie") || 
+               mobType.contains("skeleton") || 
+               mobType.contains("spider") || 
+               mobType.contains("creeper") || 
+               mobType.contains("witch") || 
+               mobType.contains("vindicator") || 
+               mobType.contains("pillager") || 
+               mobType.contains("evoker") ||
+               mobType.contains("ravager") ||
+               mobType.contains("zoglin");
+    }
+    
+    /**
+     * Check if mob is ranged (for cross-species tactics)
+     */
+    private static boolean isRangedMob(Mob mob) {
+        String mobType = mob.getType().toString().toLowerCase();
+        return mobType.contains("skeleton") || mobType.contains("witch") || 
+               mobType.contains("pillager") || mobType.contains("evoker");
+    }
+    
+    /**
+     * Check if mob is melee (for cross-species tactics)
+     */
+    private static boolean isMeleeMob(Mob mob) {
+        String mobType = mob.getType().toString().toLowerCase();
+        return mobType.contains("zombie") || mobType.contains("spider");
+    }
+    
+    /**
+     * Check if mob is fast/agile (for ambush tactics)
+     */
+    private static boolean isFastMob(Mob mob) {
+        String mobType = mob.getType().toString().toLowerCase();
+        return mobType.contains("spider") || mobType.contains("creeper");
+    }
+    
+    /**
+     * Check if mob is tank/heavy (for ambush tactics)
+     */
+    private static boolean isTankMob(Mob mob) {
+        String mobType = mob.getType().toString().toLowerCase();
+        return mobType.contains("zombie") || mobType.contains("ravager");
+    }
+    
+    /**
+     * Check if mob is expendable (for sacrifice tactics)
+     */
+    private static boolean isExpendableMob(Mob mob) {
+        String mobType = mob.getType().toString().toLowerCase();
+        return mobType.contains("creeper");
+    }
+    
+    /**
+     * Check if mob is support role (for layered defense)
+     */
+    private static boolean isSupportMob(Mob mob) {
+        String mobType = mob.getType().toString().toLowerCase();
+        return mobType.contains("spider") || mobType.contains("creeper");
     }
     
     /**
