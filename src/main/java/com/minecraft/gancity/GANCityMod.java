@@ -80,15 +80,14 @@ public class GANCityMod {
         
         LOGGER.info("MCA AI Enhanced - Mob behavior AI initialized with {} mob types", 
             mobBehaviorAI != null ? "multiple" : "0");
-        
-        // Initialize federated learning early (works for both dedicated and integrated servers)
-        initializeFederatedLearning();
     }
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
         LOGGER.info("MCA AI Enhanced - Server starting with AI enhancements");
-        // Federated learning already initialized in commonSetup
+        
+        // Initialize federated learning when server starts (works for both dedicated and integrated servers)
+        initializeFederatedLearning();
     }
     
     @SubscribeEvent
