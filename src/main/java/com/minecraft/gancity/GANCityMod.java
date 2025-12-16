@@ -31,6 +31,7 @@ public class GANCityMod {
     
     private static MobBehaviorAI mobBehaviorAI;
     private static VillagerDialogueAI villagerDialogueAI;
+    private static boolean federationInitialized = false;
     
     // Auto-save tracking (10 minutes = 12000 ticks)
     private static final int AUTO_SAVE_INTERVAL_TICKS = 12000;
@@ -86,8 +87,19 @@ public class GANCityMod {
     public void onServerStarting(ServerStartingEvent event) {
         LOGGER.info("MCA AI Enhanced - Server starting with AI enhancements");
         
-        // Initialize federated learning when server starts (works for both dedicated and integrated servers)
-        initializeFederatedLearning();
+        // Initialize federated learning when server starts (works for dedicated servers)
+        initFederationIfNeeded();
+    }
+    
+    /**
+     * Lazy initialization of federation - can be called from anywhere
+     * Safe to call multiple times (idempotent)
+     */
+    public static void initFederationIfNeeded() {
+        if (!federationInitialized) {
+            federationInitialized = true;
+            initializeFederatedLearning();
+        }
     }
     
     @SubscribeEvent
@@ -212,7 +224,7 @@ public class GANCityMod {
     /**
      * Initialize federated learning from config
      */
-    private void initializeFederatedLearning() {
+    private static void initializeFederatedLearning() {
         try {
             // Read config (simple properties-based for now)
             java.nio.file.Path configPath = java.nio.file.Paths.get("config", "adaptivemobai-common.toml");
@@ -324,12 +336,12 @@ public class GANCityMod {
     /**
      * Create default config file from resources
      */
-    private void createDefaultConfigFromResources(java.nio.file.Path configPath) throws java.io.IOException {
+    private static void createDefaultConfigFromResources(java.nio.file.Path configPath) throws java.io.IOException {
         // Create config directory if it doesn't exist
         java.nio.file.Files.createDirectories(configPath.getParent());
         
         // Copy from resources to config directory
-        try (java.io.InputStream inputStream = getClass().getResourceAsStream("/adaptivemobai-common.toml")) {
+        try (java.io.InputStream inputStream = GANCityMod.class.getResourceAsStream("/adaptivemobai-common.toml")) {
             if (inputStream != null) {
                 java.nio.file.Files.copy(inputStream, configPath);
                 LOGGER.info("Created default config at {}", configPath);

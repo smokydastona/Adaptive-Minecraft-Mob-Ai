@@ -1,5 +1,7 @@
 package com.minecraft.gancity.ai;
 
+import com.minecraft.gancity.GANCityMod;
+
 import com.minecraft.gancity.event.MobTierAssignmentHandler;
 import com.minecraft.gancity.ml.*;
 import com.mojang.logging.LogUtils;
@@ -2489,6 +2491,12 @@ public class MobBehaviorAI {
         
         // Aggregate episode into tactical weights
         tacticalAggregator.aggregateEpisode(episode, outcome, playerId != null ? playerId : "server");
+        
+        // Lazy-initialize federation if not yet started (handles singleplayer integrated servers)
+        if (federatedLearning == null) {
+            LOGGER.info("Federation not initialized, attempting lazy init...");
+            GANCityMod.initFederationIfNeeded();
+        }
         
         // Submit to federation if enabled
         if (federatedLearning != null) {
