@@ -1528,7 +1528,7 @@ async function syncEpisodeToGitHub(env, episodeData) {
     let existingContent = '';
     try {
       const getResponse = await fetch(
-        `https://api.github.com/repos/smokydastona/Adaptive-Minecraft-Mob-Ai/contents/${filePath}`,
+        `https://api.github.com/repos/smokydastona/adaptive-ai-federation-logs/contents/${filePath}`,
         {
           headers: {
             'Authorization': `token ${env.GITHUB_TOKEN}`,
@@ -1553,7 +1553,7 @@ async function syncEpisodeToGitHub(env, episodeData) {
     let sha = null;
     try {
       const getResponse = await fetch(
-        `https://api.github.com/repos/smokydastona/Adaptive-Minecraft-Mob-Ai/contents/${filePath}`,
+        `https://api.github.com/repos/smokydastona/adaptive-ai-federation-logs/contents/${filePath}`,
         {
           headers: {
             'Authorization': `token ${env.GITHUB_TOKEN}`,
@@ -1577,7 +1577,7 @@ async function syncEpisodeToGitHub(env, episodeData) {
     };
     
     const response = await fetch(
-      `https://api.github.com/repos/smokydastona/Adaptive-Minecraft-Mob-Ai/contents/${filePath}`,
+      `https://api.github.com/repos/smokydastona/adaptive-ai-federation-logs/contents/${filePath}`,
       {
         method: 'PUT',
         headers: {
