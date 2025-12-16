@@ -58,6 +58,8 @@ export default {
         // ✅ VERIFICATION LOG - Track all incoming connections
         console.log("📥 MODEL UPLOAD FROM", request.headers.get("cf-connecting-ip"));
         return await handleSubmitTactics(request, env, corsHeaders);
+      } else if (url.pathname === '/api/episodes' && request.method === 'POST') {
+        return await handleSubmitEpisode(request, env, corsHeaders, ctx);
       } else if (url.pathname === '/api/submit-sequence' && request.method === 'POST') {
         return await handleSubmitSequence(request, env, corsHeaders);
       } else if (url.pathname === '/api/download-tactics' && request.method === 'GET') {
@@ -1458,6 +1460,144 @@ Explain why this sequence is effective and what makes it successful.`
     
   } catch (e) {
     console.error('Transformer analysis failed:', e);
+  }
+}
+
+/**
+ * Handle episode submission and store to GitHub
+ */
+async function handleSubmitEpisode(request, env, corsHeaders, ctx) {
+  try {
+    const episodeData = await request.json();
+    
+    // Validate episode data
+    if (!episodeData.mobType || !episodeData.tacticsUsed) {
+      return new Response(JSON.stringify({ 
+        error: 'Missing required fields: mobType, tacticsUsed' 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // Add timestamp
+    episodeData.timestamp = Date.now();
+    
+    // Store in KV for batch processing
+    const episodeKey = `episode:${episodeData.mobType}:${Date.now()}`;
+    await env.TACTICS_KV.put(episodeKey, JSON.stringify(episodeData), {
+      expirationTtl: 86400  // 24 hours
+    });
+    
+    // Trigger GitHub sync asynchronously
+    if (env.GITHUB_TOKEN) {
+      ctx.waitUntil(syncEpisodeToGitHub(env, episodeData));
+    }
+    
+    console.log(`📊 Episode recorded: ${episodeData.mobType}, tactics:`, Object.keys(episodeData.tacticsUsed));
+    
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Episode recorded',
+      mobType: episodeData.mobType
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+    
+  } catch (error) {
+    console.error('Episode submission error:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+/**
+ * Sync episode to GitHub episodes/ directory
+ */
+async function syncEpisodeToGitHub(env, episodeData) {
+  try {
+    const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const filePath = `episodes/${date}.jsonl`;
+    
+    // Convert episode to JSONL format (one line of JSON)
+    const episodeLine = JSON.stringify(episodeData) + '\n';
+    
+    // Get existing file content or create new
+    let existingContent = '';
+    try {
+      const getResponse = await fetch(
+        `https://api.github.com/repos/smokydastona/Adaptive-Minecraft-Mob-Ai/contents/${filePath}`,
+        {
+          headers: {
+            'Authorization': `token ${env.GITHUB_TOKEN}`,
+            'User-Agent': 'Cloudflare-Worker'
+          }
+        }
+      );
+      
+      if (getResponse.ok) {
+        const fileData = await getResponse.json();
+        existingContent = atob(fileData.content); // Decode base64
+      }
+    } catch (e) {
+      // File doesn't exist yet, that's fine
+    }
+    
+    // Append new episode
+    const newContent = existingContent + episodeLine;
+    const base64Content = btoa(newContent);
+    
+    // Get current SHA if file exists
+    let sha = null;
+    try {
+      const getResponse = await fetch(
+        `https://api.github.com/repos/smokydastona/Adaptive-Minecraft-Mob-Ai/contents/${filePath}`,
+        {
+          headers: {
+            'Authorization': `token ${env.GITHUB_TOKEN}`,
+            'User-Agent': 'Cloudflare-Worker'
+          }
+        }
+      );
+      if (getResponse.ok) {
+        const fileData = await getResponse.json();
+        sha = fileData.sha;
+      }
+    } catch (e) {
+      // Ignore
+    }
+    
+    // Create or update file
+    const payload = {
+      message: `Add episode: ${episodeData.mobType} [${date}]`,
+      content: base64Content,
+      ...(sha && { sha })  // Include SHA if updating existing file
+    };
+    
+    const response = await fetch(
+      `https://api.github.com/repos/smokydastona/Adaptive-Minecraft-Mob-Ai/contents/${filePath}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${env.GITHUB_TOKEN}`,
+          'User-Agent': 'Cloudflare-Worker',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      }
+    );
+    
+    if (response.ok) {
+      console.log(`✅ Episode synced to GitHub: ${filePath}`);
+    } else {
+      const error = await response.text();
+      console.error(`❌ GitHub sync failed: ${error}`);
+    }
+    
+  } catch (error) {
+    console.error('GitHub episode sync error:', error);
   }
 }
 
