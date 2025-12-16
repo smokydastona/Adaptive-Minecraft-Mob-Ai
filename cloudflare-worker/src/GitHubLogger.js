@@ -191,4 +191,78 @@ export class GitHubLogger {
 
     return await response.json();
   }
+  
+  /**
+   * Log a combat episode (TACTICAL SYSTEM - NEW)
+   * This is the dense data we actually want to analyze
+   */
+  async logEpisode(episodeData) {
+    try {
+      const date = new Date().toISOString().split('T')[0];
+      const filename = `episodes/${date}.jsonl`;
+      
+      // JSONL format for easy analysis
+      const line = JSON.stringify({
+        timestamp: episodeData.timestamp || new Date().toISOString(),
+        round: episodeData.round,
+        episode: episodeData.episode,
+        
+        // Core episode data
+        mobType: episodeData.mobType,
+        sampleCount: episodeData.sampleCount,
+        episodeReward: episodeData.episodeReward,
+        wasSuccessful: episodeData.wasSuccessful,
+        
+        // Combat metrics
+        damageDealt: episodeData.damageDealt,
+        damageTaken: episodeData.damageTaken,
+        damageEfficiency: episodeData.damageEfficiency,
+        durationSeconds: episodeData.durationSeconds,
+        
+        // Tactical analysis
+        tacticsUsed: episodeData.tacticsUsed,
+        dominantTactic: episodeData.dominantTactic,
+        currentWeights: episodeData.currentWeights,
+        
+        // Meta
+        playerId: episodeData.playerId,
+        contributorCount: episodeData.contributorCount,
+        totalEpisodesToDate: episodeData.totalEpisodesToDate,
+        totalSamplesToDate: episodeData.totalSamplesToDate
+      });
+
+      await this.appendToFile(filename, line + '\n');
+      console.log(`📝 GitHub: Logged episode ${episodeData.episode} (${episodeData.mobType})`);
+    } catch (error) {
+      console.warn(`⚠️ GitHub episode logging failed (non-critical): ${error.message}`);
+    }
+  }
+  
+  /**
+   * Log aggregate statistics (every 10 episodes)
+   */
+  async logAggregate(aggregateData) {
+    try {
+      const date = new Date().toISOString().split('T')[0];
+      const filename = `aggregates/${date}.jsonl`;
+      
+      const line = JSON.stringify({
+        timestamp: aggregateData.timestamp || new Date().toISOString(),
+        round: aggregateData.round,
+        summary: aggregateData.summary,
+        
+        totalEpisodes: aggregateData.totalEpisodes,
+        totalSamples: aggregateData.totalSamples,
+        avgSamplesPerEpisode: aggregateData.avgSamplesPerEpisode,
+        contributors: aggregateData.contributors,
+        
+        mobTypeLearning: aggregateData.mobTypeLearning
+      });
+
+      await this.appendToFile(filename, line + '\n');
+      console.log(`📝 GitHub: Logged aggregate stats (${aggregateData.totalEpisodes} episodes)`);
+    } catch (error) {
+      console.warn(`⚠️ GitHub aggregate logging failed (non-critical): ${error.message}`);
+    }
+  }
 }

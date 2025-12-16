@@ -61,6 +61,19 @@ export class FederationCoordinator {
     if (path === '/coordinator/tiers/download' && request.method === 'GET') {
       return await this.handleTierDownload(request);
     }
+    
+    // Tactical episode routes
+    if (path === '/coordinator/episodes/upload' && request.method === 'POST') {
+      return await this.handleEpisodeUpload(request);
+    }
+    
+    if (path === '/coordinator/tactical-weights' && request.method === 'GET') {
+      return await this.handleTacticalWeightsDownload(request);
+    }
+    
+    if (path === '/coordinator/tactical-stats' && request.method === 'GET') {
+      return await this.handleTacticalStats(request);
+    }
 
     return new Response('Not Found', { status: 404 });
   }
@@ -538,4 +551,310 @@ export class FederationCoordinator {
   }
   
   // ==================== END TIER PROGRESSION ENDPOINTS ====================
+  
+  // ==================== TACTICAL EPISODE FEDERATION ====================
+  
+  /**
+   * Handle combat episode upload - THIS IS THE NEW SIGNAL
+   * Aggregates high-level tactical patterns and logs to GitHub for analysis
+   */
+  async handleEpisodeUpload(request) {
+    try {
+      const episode = await request.json();
+      const {
+        mobType,
+        sampleCount,
+        episodeReward,
+        wasSuccessful,
+        damageDealt,
+        damageTaken,
+        durationTicks,
+        tacticsUsed,
+        playerId,
+        timestamp
+      } = episode;
+      
+      if (!mobType || !sampleCount || episodeReward === undefined) {
+        return new Response(JSON.stringify({ error: 'Missing episode data' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      // Get current tactical data
+      let tacticalData = await this.state.storage.get('tacticalData') || {
+        episodes: [],
+        weights: {},
+        stats: {
+          totalEpisodes: 0,
+          totalSamples: 0,
+          contributors: new Set()
+        }
+      };
+      
+      // Add episode to history (keep last 1000 episodes)
+      const episodeRecord = {
+        mobType,
+        sampleCount,
+        episodeReward,
+        wasSuccessful,
+        damageDealt,
+        damageTaken,
+        durationTicks,
+        tacticsUsed,
+        playerId: playerId || 'unknown',
+        timestamp: timestamp || Date.now()
+      };
+      
+      tacticalData.episodes.push(episodeRecord);
+      if (tacticalData.episodes.length > 1000) {
+        tacticalData.episodes.shift(); // Remove oldest
+      }
+      
+      // Update statistics
+      tacticalData.stats.totalEpisodes++;
+      tacticalData.stats.totalSamples += sampleCount;
+      if (playerId) {
+        tacticalData.stats.contributors.add(playerId);
+      }
+      
+      // Aggregate into tactical weights using exponential moving average
+      const LEARNING_RATE = 0.05;
+      const successMultiplier = wasSuccessful ? 1.0 : -0.5;
+      
+      if (!tacticalData.weights[mobType]) {
+        tacticalData.weights[mobType] = {};
+      }
+      
+      // Update weights for each tactic used in this episode
+      if (tacticsUsed && typeof tacticsUsed === 'object') {
+        const totalTactics = Object.values(tacticsUsed).reduce((sum, count) => sum + count, 0);
+        
+        for (const [tactic, count] of Object.entries(tacticsUsed)) {
+          const tacticWeight = (count / totalTactics) * successMultiplier;
+          const currentWeight = tacticalData.weights[mobType][tactic] || 0;
+          
+          // Exponential moving average
+          tacticalData.weights[mobType][tactic] = 
+            currentWeight * (1 - LEARNING_RATE) + tacticWeight * LEARNING_RATE;
+        }
+      }
+      
+      // Save updated tactical data
+      await this.state.storage.put('tacticalData', tacticalData);
+      
+      // LOG TO GITHUB - Comprehensive episode recording
+      if (this.logger) {
+        // Build detailed episode log
+        const logData = {
+          round: this.currentRound,
+          episode: tacticalData.stats.totalEpisodes,
+          timestamp: new Date(timestamp || Date.now()).toISOString(),
+          
+          // Episode details
+          mobType,
+          sampleCount,
+          episodeReward: parseFloat(episodeReward.toFixed(2)),
+          wasSuccessful,
+          
+          // Combat metrics
+          damageDealt: parseFloat((damageDealt || 0).toFixed(1)),
+          damageTaken: parseFloat((damageTaken || 0).toFixed(1)),
+          damageEfficiency: damageTaken > 0 ? parseFloat((damageDealt / damageTaken).toFixed(2)) : 0,
+          durationSeconds: parseFloat((durationTicks / 20).toFixed(1)),
+          
+          // Tactical analysis
+          tacticsUsed: tacticsUsed || {},
+          dominantTactic: this.findDominantTactic(tacticsUsed),
+          
+          // Current weights for this mob type (post-update)
+          currentWeights: this.getTopTactics(tacticalData.weights[mobType], 5),
+          
+          // Meta information
+          playerId: playerId || 'unknown',
+          contributorCount: tacticalData.stats.contributors.size,
+          totalEpisodesToDate: tacticalData.stats.totalEpisodes,
+          totalSamplesToDate: tacticalData.stats.totalSamples
+        };
+        
+        // Log to GitHub (non-blocking)
+        this.logger.logEpisode(logData).catch(err => {
+          console.error('GitHub logging failed (non-critical):', err.message);
+        });
+        
+        // Log aggregated stats every 10 episodes
+        if (tacticalData.stats.totalEpisodes % 10 === 0) {
+          const aggregateLog = {
+            round: this.currentRound,
+            timestamp: new Date().toISOString(),
+            summary: 'AGGREGATE_STATS',
+            
+            totalEpisodes: tacticalData.stats.totalEpisodes,
+            totalSamples: tacticalData.stats.totalSamples,
+            avgSamplesPerEpisode: parseFloat((tacticalData.stats.totalSamples / tacticalData.stats.totalEpisodes).toFixed(1)),
+            contributors: tacticalData.stats.contributors.size,
+            
+            // Tactical learning progress per mob type
+            mobTypeLearning: Object.keys(tacticalData.weights).map(mob => ({
+              mobType: mob,
+              topTactics: this.getTopTactics(tacticalData.weights[mob], 3),
+              deltaMagnitude: this.calculateDeltaMagnitude(tacticalData.weights[mob])
+            }))
+          };
+          
+          this.logger.logAggregate(aggregateLog).catch(err => {
+            console.error('Aggregate logging failed:', err.message);
+          });
+        }
+      }
+      
+      console.log(`🎯 Episode aggregated: ${mobType} (${sampleCount} samples, reward: ${episodeReward.toFixed(1)})`);
+      
+      return new Response(JSON.stringify({
+        success: true,
+        episodeNumber: tacticalData.stats.totalEpisodes,
+        totalSamples: tacticalData.stats.totalSamples,
+        message: 'Episode aggregated successfully'
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+    } catch (error) {
+      console.error('Episode upload error:', error);
+      return new Response(JSON.stringify({
+        error: 'Failed to process episode',
+        message: error.message
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+  
+  /**
+   * Download aggregated tactical weights
+   */
+  async handleTacticalWeightsDownload(request) {
+    try {
+      const tacticalData = await this.state.storage.get('tacticalData') || { weights: {} };
+      
+      return new Response(JSON.stringify(tacticalData.weights), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+    } catch (error) {
+      console.error('Tactical weights download error:', error);
+      return new Response(JSON.stringify({
+        error: 'Failed to retrieve tactical weights',
+        message: error.message
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+  
+  /**
+   * Get tactical statistics
+   */
+  async handleTacticalStats(request) {
+    try {
+      const tacticalData = await this.state.storage.get('tacticalData') || {
+        stats: {
+          totalEpisodes: 0,
+          totalSamples: 0,
+          contributors: new Set()
+        },
+        weights: {}
+      };
+      
+      const stats = {
+        totalEpisodes: tacticalData.stats.totalEpisodes,
+        totalSamples: tacticalData.stats.totalSamples,
+        contributors: tacticalData.stats.contributors.size,
+        avgSamplesPerEpisode: tacticalData.stats.totalEpisodes > 0 
+          ? parseFloat((tacticalData.stats.totalSamples / tacticalData.stats.totalEpisodes).toFixed(1))
+          : 0,
+        mobTypesLearned: Object.keys(tacticalData.weights).length,
+        
+        // Top tactics per mob type
+        topTactics: Object.keys(tacticalData.weights).reduce((acc, mobType) => {
+          acc[mobType] = this.getTopTactics(tacticalData.weights[mobType], 3);
+          return acc;
+        }, {})
+      };
+      
+      return new Response(JSON.stringify(stats), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+    } catch (error) {
+      console.error('Tactical stats error:', error);
+      return new Response(JSON.stringify({
+        error: 'Failed to retrieve tactical statistics',
+        message: error.message
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+  
+  /**
+   * Helper: Find dominant tactic in episode
+   */
+  findDominantTactic(tacticsUsed) {
+    if (!tacticsUsed || typeof tacticsUsed !== 'object') {
+      return 'unknown';
+    }
+    
+    let maxTactic = null;
+    let maxCount = 0;
+    
+    for (const [tactic, count] of Object.entries(tacticsUsed)) {
+      if (count > maxCount) {
+        maxCount = count;
+        maxTactic = tactic;
+      }
+    }
+    
+    return maxTactic || 'unknown';
+  }
+  
+  /**
+   * Helper: Get top N tactics by weight
+   */
+  getTopTactics(weights, topN) {
+    if (!weights || typeof weights !== 'object') {
+      return [];
+    }
+    
+    return Object.entries(weights)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, topN)
+      .map(([tactic, weight]) => ({
+        tactic,
+        weight: parseFloat(weight.toFixed(3))
+      }));
+  }
+  
+  /**
+   * Helper: Calculate delta magnitude (learning activity indicator)
+   */
+  calculateDeltaMagnitude(weights) {
+    if (!weights || typeof weights !== 'object') {
+      return 0;
+    }
+    
+    const values = Object.values(weights);
+    if (values.length === 0) return 0;
+    
+    const sum = values.reduce((acc, val) => acc + Math.abs(val), 0);
+    return parseFloat((sum / values.length).toFixed(3));
+  }
+  
+  // ==================== END TACTICAL EPISODE FEDERATION ====================
 }
