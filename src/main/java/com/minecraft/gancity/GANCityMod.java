@@ -59,12 +59,14 @@ public class GANCityMod {
             LOGGER.warn("Could not configure DJL cache path: {}", e.getMessage());
         }
         
-        // Initialize mod compatibility system (async for performance)
-        event.enqueueWork(() -> {
+        // Initialize mod compatibility system - but NOT during enqueueWork to avoid classloading deadlocks
+        // These do reflection which can hang if classes are still being transformed
+        try {
             ModCompatibility.init();
-            CuriosIntegration.init();
-            FTBTeamsIntegration.init();
-        });
+            // Curios and FTB Teams will init lazily on first use to avoid classloading issues
+        } catch (Exception e) {
+            LOGGER.error("Failed to initialize mod compatibility: {}", e.getMessage());
+        }
         
         // Initialize AI systems (lazy - only when first needed)
         // mobBehaviorAI and villagerDialogueAI initialized on first access

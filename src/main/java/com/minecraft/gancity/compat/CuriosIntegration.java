@@ -53,7 +53,10 @@ public class CuriosIntegration {
         List<ItemStack> curios = new ArrayList<>();
         
         if (!initialized) {
-            return curios;
+            init(); // Lazy init on first use to avoid classloading deadlock
+            if (!initialized) {
+                return curios;
+            }
         }
         
         try {

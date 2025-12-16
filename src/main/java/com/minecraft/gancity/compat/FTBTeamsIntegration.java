@@ -49,7 +49,10 @@ public class FTBTeamsIntegration {
      */
     public static boolean areTeammates(ServerPlayer player1, ServerPlayer player2) {
         if (!initialized) {
-            return false;
+            init(); // Lazy init on first use to avoid classloading deadlock
+            if (!initialized) {
+                return false;
+            }
         }
         
         try {
