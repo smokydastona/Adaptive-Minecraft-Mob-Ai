@@ -1,6 +1,7 @@
 package com.minecraft.gancity.ai;
 
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.monster.*;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import com.mojang.logging.LogUtils;
@@ -39,6 +40,12 @@ public class TacticalActionSpace {
         DISTRACT_AND_STRIKE("distract_and_strike", "One ally distracts while others attack"),
         ROTATING_PRESSURE("rotating_pressure", "Take turns engaging to maintain constant pressure"),
         PROTECT_WEAK_ALLY("protect_weak_ally", "Shield low-health allies from player"),
+        
+        // Cross-species tactics (mixed mob coordination)
+        RANGED_MELEE_COMBO("ranged_melee_combo", "Ranged mobs provide cover fire while melee advances"),
+        SACRIFICE_PLAY("sacrifice_play", "Expendable mobs draw attention for assassins"),
+        AMBUSH_SETUP("ambush_setup", "Fast mobs herd player toward heavy hitters"),
+        LAYERED_DEFENSE("layered_defense", "Tanks front, ranged behind, casters supporting"),
         
         // Utility tactics
         USE_TERRAIN("use_terrain", "Leverage environmental obstacles"),
@@ -416,6 +423,118 @@ public class TacticalActionSpace {
                 }
                 break;
                 
+            // CROSS-SPECIES TACTICS
+            case RANGED_MELEE_COMBO:
+                // Melee mobs advance aggressively if ranged allies are providing cover fire
+                // Ranged mobs maintain distance and shoot while melee allies engage
+                List<Mob> comboAllies = getNearbyAllies(mob);
+                boolean hasRangedAlly = comboAllies.stream().anyMatch(m -> m instanceof Skeleton || m instanceof Witch || m instanceof Pillager);
+                boolean hasMeleeAlly = comboAllies.stream().anyMatch(m -> m instanceof Zombie || m instanceof Spider);
+                
+                if (mob instanceof Skeleton || mob instanceof Witch || mob instanceof Pillager) {
+                    // I'm ranged - keep distance, provide suppressing fire
+                    float comboDist = mob.distanceTo(target);
+                    if (comboDist < 8 && hasMeleeAlly) {
+                        // Allies engaged, I retreat to optimal range
+                        Vec3 back = mob.position().subtract(target.position()).normalize();
+                        Vec3 rangedRetreatPos = mob.position().add(back.scale(3));
+                        mob.getNavigation().moveTo(rangedRetreatPos.x, rangedRetreatPos.y, rangedRetreatPos.z, 1.2);
+                    } else if (comboDist > 12) {
+                        // Too far, close to shooting range
+                        mob.getNavigation().moveTo(target, 1.0);
+                    }
+                    // Else stay in position and shoot
+                } else {
+                    // I'm melee - advance aggressively under covering fire
+                    if (hasRangedAlly) {
+                        mob.getNavigation().moveTo(target, 1.5);  // Faster approach with cover
+                    } else {
+                        mob.getNavigation().moveTo(target, 1.2);  // No cover, be careful
+                    }
+                }
+                break;
+                
+            case SACRIFICE_PLAY:
+                // Expendable mobs (creepers, low-health) draw player attention for assassins
+                List<Mob> sacrificeAllies = getNearbyAllies(mob);
+                boolean hasAssassin = sacrificeAllies.stream().anyMatch(m -> 
+                    m instanceof Spider || m.getHealth() > mob.getHealth() * 1.5f
+                );
+                
+                if (hasAssassin) {
+                    // I'm the distraction - be loud and obvious
+                    mob.getNavigation().moveTo(target, 1.8);  // Aggressive rush
+                    if (mob instanceof Creeper && mob.distanceTo(target) < 3) {
+                        // Prime explosion as distraction (vanilla behavior handles this)
+                    }
+                } else {
+                    // No one to capitalize on sacrifice, fight normally
+                    mob.getNavigation().moveTo(target, 1.0);
+                }
+                break;
+                
+            case AMBUSH_SETUP:
+                // Fast mobs herd player toward slower heavy hitters
+                List<Mob> ambushAllies = getNearbyAllies(mob);
+                Mob heavyHitter = null;
+                for (Mob ally : ambushAllies) {
+                    if ((ally instanceof Zombie || ally instanceof Ravager) && 
+                        ally.distanceTo(target) > 8) {
+                        heavyHitter = ally;
+                        break;
+                    }
+                }
+                
+                if (heavyHitter != null && (mob instanceof Spider || mob instanceof Creeper)) {
+                    // I'm fast - position to push player toward heavy ally
+                    Vec3 playerToHeavy = heavyHitter.position().subtract(target.position()).normalize();
+                    Vec3 herdPos = target.position().subtract(playerToHeavy.scale(3));  // Get on opposite side
+                    mob.getNavigation().moveTo(herdPos.x, herdPos.y, herdPos.z, 1.4);
+                } else {
+                    mob.getNavigation().moveTo(target, 1.2);
+                }
+                break;
+                
+            case LAYERED_DEFENSE:
+                // Form tactical layers: tanks front, ranged back, support middle
+                List<Mob> layerAllies = getNearbyAllies(mob);
+                boolean isTank = mob instanceof Zombie || mob instanceof Ravager;
+                boolean isRanged = mob instanceof Skeleton || mob instanceof Witch || mob instanceof Pillager;
+                boolean isSupport = mob instanceof Spider || mob instanceof Creeper;
+                
+                float playerDist = mob.distanceTo(target);
+                
+                if (isTank) {
+                    // Frontline - engage directly
+                    if (playerDist > 3) {
+                        mob.getNavigation().moveTo(target, 1.3);
+                    } else {
+                        // In melee range, hold position
+                    }
+                } else if (isRanged) {
+                    // Backline - maintain 8-12 block range
+                    if (playerDist < 8) {
+                        Vec3 retreat = mob.position().subtract(target.position()).normalize();
+                        Vec3 backlinePos = mob.position().add(retreat.scale(2));
+                        mob.getNavigation().moveTo(backlinePos.x, backlinePos.y, backlinePos.z, 1.1);
+                    } else if (playerDist > 12) {
+                        mob.getNavigation().moveTo(target, 0.9);
+                    }
+                } else if (isSupport) {
+                    // Mid-range support - flank and harass at 5-8 blocks
+                    if (playerDist < 5) {
+                        Vec3 flankLeft = new Vec3(-target.getLookAngle().z, 0, target.getLookAngle().x).normalize();
+                        Vec3 flankPos = target.position().add(flankLeft.scale(6));
+                        mob.getNavigation().moveTo(flankPos.x, flankPos.y, flankPos.z, 1.2);
+                    } else if (playerDist > 8) {
+                        mob.getNavigation().moveTo(target, 1.1);
+                    }
+                } else {
+                    // Unknown role, default to mid-range
+                    mob.getNavigation().moveTo(target, 1.0);
+                }
+                break;
+                
             case DEFAULT_MELEE:
             default:
                 // Standard Minecraft melee
@@ -425,14 +544,35 @@ public class TacticalActionSpace {
     }
     
     /**
-     * Get nearby allies of the same type
+     * Get nearby allies - now supports cross-species hostile mob coordination
+     * Zombies, skeletons, spiders, creepers, etc. can work together
      */
     private static List<Mob> getNearbyAllies(Mob mob) {
         return mob.level().getEntitiesOfClass(
             Mob.class,
             mob.getBoundingBox().inflate(8.0),
-            m -> m != mob && !m.isDeadOrDying() && m.getType() == mob.getType()
+            m -> m != mob && !m.isDeadOrDying() && isHostileMob(m) && isHostileMob(mob)
         );
+    }
+    
+    /**
+     * Check if a mob is a hostile monster (can coordinate with other hostiles)
+     */
+    private static boolean isHostileMob(Mob mob) {
+        return mob instanceof Zombie || 
+               mob instanceof Skeleton || 
+               mob instanceof Spider || 
+               mob instanceof Creeper || 
+               mob instanceof Witch || 
+               mob instanceof Vindicator || 
+               mob instanceof Pillager || 
+               mob instanceof Evoker ||
+               mob instanceof Ravager ||
+               mob instanceof Drowned ||
+               mob instanceof Husk ||
+               mob instanceof Stray ||
+               mob instanceof WitherSkeleton ||
+               mob instanceof Zoglin;
     }
     
     /**
@@ -461,6 +601,8 @@ public class TacticalActionSpace {
                     TacticalAction.COORDINATE_FLANK,      // Cooperative
                     TacticalAction.PINCER_ATTACK,         // Cooperative
                     TacticalAction.ROTATING_PRESSURE,     // Cooperative
+                    TacticalAction.RANGED_MELEE_COMBO,    // Cross-species (advance under cover fire)
+                    TacticalAction.LAYERED_DEFENSE,       // Cross-species (frontline tank)
                     TacticalAction.DEFAULT_MELEE
                 );
                 
@@ -473,6 +615,8 @@ public class TacticalActionSpace {
                     TacticalAction.RETREAT_AND_HEAL,
                     TacticalAction.DISTRACT_AND_STRIKE,   // Cooperative (one distracts, others shoot)
                     TacticalAction.PROTECT_WEAK_ALLY,     // Cooperative (cover retreating allies)
+                    TacticalAction.RANGED_MELEE_COMBO,    // Cross-species (provide cover fire)
+                    TacticalAction.LAYERED_DEFENSE,       // Cross-species (ranged backline)
                     TacticalAction.DEFAULT_MELEE
                 );
                 
@@ -482,6 +626,8 @@ public class TacticalActionSpace {
                     TacticalAction.FEINT_RETREAT,
                     TacticalAction.USE_TERRAIN,
                     TacticalAction.WAIT_FOR_OPENING,
+                    TacticalAction.SACRIFICE_PLAY,        // Cross-species (distraction/kamikaze)
+                    TacticalAction.AMBUSH_SETUP,          // Cross-species (explosive surprise)
                     TacticalAction.DEFAULT_MELEE
                 );
                 
@@ -492,6 +638,8 @@ public class TacticalActionSpace {
                     TacticalAction.OVERHEAD_COMBO,
                     TacticalAction.DODGE_WEAVE,
                     TacticalAction.PUNISH_SHIELD_DROP,
+                    TacticalAction.AMBUSH_SETUP,          // Cross-species (herd player with speed)
+                    TacticalAction.LAYERED_DEFENSE,       // Cross-species (harass flanks)
                     TacticalAction.DEFAULT_MELEE
                 );
                 

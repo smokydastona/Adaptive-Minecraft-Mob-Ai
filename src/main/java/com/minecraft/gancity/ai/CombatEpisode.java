@@ -90,6 +90,14 @@ public class CombatEpisode {
                 }
             }
             
+            // CROSS-SPECIES REWARDS: Bonus for mixed mob coordination
+            long crossSpeciesTactics = samples.stream()
+                .filter(s -> isCrossSpeciesTactic(s.action) && s.state.nearbyAllies >= 1)
+                .count();
+            if (crossSpeciesTactics > 0 && mobKilledPlayer) {
+                reward += crossSpeciesTactics * 8.0f;  // Higher bonus for advanced coordination
+            }
+            
             return reward;
         }
         
@@ -99,6 +107,13 @@ public class CombatEpisode {
                    action == TacticalActionSpace.TacticalAction.DISTRACT_AND_STRIKE ||
                    action == TacticalActionSpace.TacticalAction.ROTATING_PRESSURE ||
                    action == TacticalActionSpace.TacticalAction.PROTECT_WEAK_ALLY;
+        }
+        
+        private boolean isCrossSpeciesTactic(TacticalActionSpace.TacticalAction action) {
+            return action == TacticalActionSpace.TacticalAction.RANGED_MELEE_COMBO ||
+                   action == TacticalActionSpace.TacticalAction.SACRIFICE_PLAY ||
+                   action == TacticalActionSpace.TacticalAction.AMBUSH_SETUP ||
+                   action == TacticalActionSpace.TacticalAction.LAYERED_DEFENSE;
         }
         
         public boolean wasSuccessful() {
