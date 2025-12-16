@@ -91,6 +91,42 @@ public class GANCityMod {
         initFederationIfNeeded();
     }
     
+    @SubscribeEvent
+    public void onEntityJoin(net.minecraftforge.event.entity.EntityJoinLevelEvent event) {
+        // Add AI goals when mobs spawn - replaces mixin system
+        if (event.getEntity() instanceof net.minecraft.world.entity.Mob mob && !event.getLevel().isClientSide()) {
+            addAIGoals(mob);
+        }
+    }
+    
+    private static void addAIGoals(net.minecraft.world.entity.Mob mob) {
+        try {
+            // Ice and Fire compatibility
+            if (ModList.get().isLoaded("iceandfire")) {
+                String entityId = mob.getType().toString();
+                if (entityId.contains("iceandfire:")) {
+                    return;
+                }
+            }
+            
+            String className = mob.getClass().getName();
+            boolean isMCAVillager = className.contains("mca.entity.VillagerEntityMCA");
+            boolean isVanillaVillager = mob instanceof net.minecraft.world.entity.npc.Villager;
+            
+            if (isMCAVillager) {
+                mob.goalSelector.addGoal(6, new com.minecraft.gancity.ai.EnhancedMeleeGoal(mob, 1.0, false, false, true));
+            } else if (isVanillaVillager) {
+                mob.goalSelector.addGoal(7, new com.minecraft.gancity.ai.EnhancedMeleeGoal(mob, 1.0, false, false, true));
+            } else if (mob instanceof net.minecraft.world.entity.monster.Monster) {
+                mob.goalSelector.addGoal(2, new com.minecraft.gancity.ai.EnhancedMeleeGoal(mob, 1.0, true, true, false));
+            } else {
+                mob.goalSelector.addGoal(5, new com.minecraft.gancity.ai.EnhancedMeleeGoal(mob, 1.2, false, true, false));
+            }
+        } catch (Exception e) {
+            LOGGER.error("Failed to add AI goals to {}: {}", mob.getType(), e.getMessage());
+        }
+    }
+    
     /**
      * Lazy initialization of federation - can be called from anywhere
      * Safe to call multiple times (idempotent)
