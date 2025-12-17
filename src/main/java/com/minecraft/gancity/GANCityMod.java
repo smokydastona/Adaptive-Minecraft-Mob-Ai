@@ -45,44 +45,40 @@ public class GANCityMod {
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
-        LOGGER.info("MCA AI Enhanced - Initializing AI systems (SERVER-ONLY)...");
+        LOGGER.info("MCA AI Enhanced - Deferring initialization to avoid classloading deadlock");
         
-        // Configure DJL to download native libraries to game directory instead of user home
-        // This makes it easy to find/delete and works on servers without user directories
-        try {
-            String gameDir = System.getProperty("user.dir"); // Minecraft instance root
-            String djlCachePath = gameDir + "/libraries/ai.djl";
-            System.setProperty("DJL_CACHE_DIR", djlCachePath);
-            System.setProperty("ai.djl.offline", "false"); // Allow downloads
-            LOGGER.info("DJL cache configured: {}", djlCachePath);
-        } catch (Exception e) {
-            LOGGER.warn("Could not configure DJL cache path: {}", e.getMessage());
-        }
-        
-        // Initialize mod compatibility system - but NOT during enqueueWork to avoid classloading deadlocks
-        // These do reflection which can hang if classes are still being transformed
-        try {
-            ModCompatibility.init();
-            // Curios and FTB Teams will init lazily on first use to avoid classloading issues
-        } catch (Exception e) {
-            LOGGER.error("Failed to initialize mod compatibility: {}", e.getMessage());
-        }
-        
-        // Initialize AI systems (lazy - only when first needed)
-        // mobBehaviorAI and villagerDialogueAI initialized on first access
-        
-        // Check if MCA Reborn is loaded
-        boolean mcaLoaded = ModList.get().isLoaded("mca");
-        MCAIntegration.setMCALoaded(mcaLoaded);
-        
-        if (mcaLoaded) {
-            LOGGER.info("MCA AI Enhanced - MCA Reborn detected! Enhanced villager AI enabled.");
-        } else {
-            LOGGER.warn("MCA AI Enhanced - MCA Reborn not found. Villager dialogue features disabled.");
-        }
-        
-        LOGGER.info("MCA AI Enhanced - Mob behavior AI initialized with {} mob types", 
-            mobBehaviorAI != null ? "multiple" : "0");
+        // CRITICAL: Do NOT call ModList.get() or any mod checking during commonSetup!
+        // This happens at "Compatibility level set to JAVA_17" BEFORE ModList is ready
+        // Queue all initialization to run AFTER the event completes
+        event.enqueueWork(() -> {
+            try {
+                LOGGER.info("MCA AI Enhanced - Initializing AI systems (SERVER-ONLY)...");
+                
+                // Configure DJL (safe - just system properties)
+                String gameDir = System.getProperty("user.dir");
+                String djlCachePath = gameDir + "/libraries/ai.djl";
+                System.setProperty("DJL_CACHE_DIR", djlCachePath);
+                System.setProperty("ai.djl.offline", "false");
+                LOGGER.info("DJL cache configured: {}", djlCachePath);
+                
+                // Now safe to check mods - ModList is initialized
+                ModCompatibility.init();
+                
+                // Check MCA
+                boolean mcaLoaded = ModList.get().isLoaded("mca");
+                MCAIntegration.setMCALoaded(mcaLoaded);
+                
+                if (mcaLoaded) {
+                    LOGGER.info("MCA AI Enhanced - MCA Reborn detected! Enhanced villager AI enabled.");
+                } else {
+                    LOGGER.warn("MCA AI Enhanced - MCA Reborn not found. Villager dialogue features disabled.");
+                }
+                
+                LOGGER.info("MCA AI Enhanced - Initialization complete");
+            } catch (Exception e) {
+                LOGGER.error("Failed to initialize MCA AI Enhanced: {}", e.getMessage(), e);
+            }
+        });
     }
 
     @SubscribeEvent
