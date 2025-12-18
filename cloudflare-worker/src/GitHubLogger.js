@@ -8,16 +8,14 @@
  * Purpose: Debug federation rounds, track history, visualize activity
  * 
  * Storage Strategy (Historical Records vs Quick Access):
- * 
+ *
  * APPEND-ONLY (Historical Records - NEVER Overwritten):
- * - rounds/round-NNNNNN.json: Federation round metadata (unique per round)
- * - models/YYYY-MM-DD/round-NNNNNN.json: Full global model snapshot (unique per round)
- * - models/YYYY-MM-DD/summary.jsonl: Daily model summaries (appends)
+ * - rounds/round-NNNNNN.json: Round metadata + FULL global model snapshot (one file per round)
  * - episodes/YYYY-MM-DD.jsonl: Combat episode logs (appends daily)
  * - uploads/YYYY-MM-DD.jsonl: Upload event tracking (appends daily)
  * - aggregates/YYYY-MM-DD.jsonl: Aggregate statistics (appends daily)
  * - status/history/YYYY-MM-DD.jsonl: Status snapshots (appends daily)
- * 
+ *
  * OVERWRITES (Quick Access):
  * - status/latest.json: Current federation status (for monitoring dashboards)
  */
@@ -39,6 +37,9 @@ export class GitHubLogger {
       const timestamp = new Date().toISOString();
       const roundNumber = String(roundData.round).padStart(6, '0');
       const filename = `rounds/round-${roundNumber}.json`;
+
+      const tactics = roundData.tactics || {};
+      const mobTypeSummary = this.#buildMobTypeSummary(tactics);
       
       const content = JSON.stringify({
         round: roundData.round,
@@ -46,6 +47,10 @@ export class GitHubLogger {
         contributors: roundData.contributors,
         mobTypes: roundData.mobTypes || [],
         modelStats: roundData.modelStats || {},
+        // Full global model snapshot (this is the important data)
+        tactics,
+        // Compact summary for quick human scanning
+        mobTypeSummary,
         metadata: {
           loggedAt: timestamp,
           source: 'federation-coordinator',
@@ -61,6 +66,29 @@ export class GitHubLogger {
       // SILENT FAILURE - never break federation
       console.warn(`⚠️ GitHub logging failed (non-critical): ${error.message}`);
     }
+  }
+
+  #buildMobTypeSummary(tacticsByMobType) {
+    const summary = {};
+    for (const [mobType, tactics] of Object.entries(tacticsByMobType || {})) {
+      const actions = Object.entries(tactics || {}).map(([action, t]) => {
+        const avgReward = typeof t?.avgReward === 'number' ? t.avgReward : 0;
+        const count = typeof t?.count === 'number' ? t.count : 0;
+        const successRate = typeof t?.successRate === 'number'
+          ? t.successRate
+          : (typeof t?.successCount === 'number' && count > 0 ? (t.successCount / count) : 0);
+
+        return { action, avgReward, count, successRate };
+      });
+
+      actions.sort((a, b) => (b.avgReward - a.avgReward) || (b.successRate - a.successRate) || (b.count - a.count));
+
+      summary[mobType] = {
+        actionCount: actions.length,
+        topActions: actions.slice(0, 10)
+      };
+    }
+    return summary;
   }
 
   /**
@@ -310,46 +338,13 @@ export class GitHubLogger {
    * NEVER overwrites - each snapshot is a unique historical record
    */
   async logGlobalModel(modelData) {
-    try {
-      const timestamp = new Date().toISOString();
-      const date = timestamp.split('T')[0];
-      const roundNumber = String(modelData.round).padStart(6, '0');
-      
-      // Create unique filename: models/YYYY-MM-DD/round-NNNNNN.json
-      const filename = `models/${date}/round-${roundNumber}.json`;
-      
-      const content = JSON.stringify({
-        round: modelData.round,
-        timestamp: modelData.timestamp || timestamp,
-        contributors: modelData.contributors,
-        tactics: modelData.tactics, // Full tactics data for all mob types
-        metadata: {
-          loggedAt: timestamp,
-          source: 'federation-coordinator',
-          version: '3.0.0',
-          totalActions: Object.values(modelData.tactics).reduce((sum, mob) => 
-            sum + Object.keys(mob).length, 0),
-          mobTypeCount: Object.keys(modelData.tactics).length
-        }
-      }, null, 2);
-      
-      // Write unique file per round - NEVER overwrites
-      await this.writeFile(filename, content, `Global model snapshot - Round ${modelData.round}`);
-      
-      // ALSO append to daily summary (JSONL for easy analysis)
-      const summaryLine = JSON.stringify({
-        timestamp,
-        round: modelData.round,
-        contributors: modelData.contributors,
-        mobTypes: Object.keys(modelData.tactics),
-        totalActions: Object.values(modelData.tactics).reduce((sum, mob) => 
-          sum + Object.keys(mob).length, 0)
-      });
-      await this.appendToFile(`models/${date}/summary.jsonl`, summaryLine + '\n');
-      
-      console.log(`📝 GitHub: Logged global model Round ${modelData.round} to ${filename}`);
-    } catch (error) {
-      console.warn(`⚠️ GitHub model logging failed (non-critical): ${error.message}`);
-    }
+    // Backwards-compatible shim: keep legacy callers safe, but write into the
+    // single per-round artifact to avoid a messy GitHub layout.
+    return this.logRound({
+      round: modelData.round,
+      timestamp: modelData.timestamp,
+      contributors: modelData.contributors,
+      tactics: modelData.tactics
+    });
   }
 }

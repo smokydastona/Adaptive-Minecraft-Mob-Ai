@@ -259,6 +259,7 @@ export class FederationCoordinator {
     await this.publishGlobalModel();
 
     // LOG TO GITHUB (side effect only - never blocks federation)
+    // Keep GitHub layout clean: one file per round that includes the global model snapshot.
     if (this.logger) {
       // Extract mob types and stats for the log
       const mobTypes = Object.keys(aggregated);
@@ -270,26 +271,16 @@ export class FederationCoordinator {
         };
       }
 
-      // Log round completion (async, non-blocking)
+      // Single write per round (async, non-blocking)
       this.logger.logRound({
         round: this.currentRound,
         timestamp: new Date(this.globalModel.timestamp).toISOString(),
         contributors: this.models.size,
         mobTypes,
-        modelStats
-      }).catch(err => {
-        // Silent failure - already logged in GitHubLogger
-      });
-      
-      // CRITICAL: Log the actual global model tactics (historical snapshot)
-      // This creates a permanent record of AI evolution over time
-      this.logger.logGlobalModel({
-        round: this.currentRound,
-        timestamp: new Date(this.globalModel.timestamp).toISOString(),
-        contributors: this.models.size,
+        modelStats,
         tactics: aggregated
-      }).catch(err => {
-        // Silent failure - never blocks federation
+      }).catch(() => {
+        // Silent failure - already logged in GitHubLogger
       });
     }
 
