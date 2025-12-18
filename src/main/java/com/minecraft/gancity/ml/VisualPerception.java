@@ -2,13 +2,11 @@ package com.minecraft.gancity.ml;
 
 import com.minecraft.gancity.compat.CuriosIntegration;
 import com.minecraft.gancity.compat.ModCompatibility;
-import com.mojang.logging.LogUtils;
 import net.minecraft.world.entity.player.Player;
 import java.util.UUID;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.entity.EquipmentSlot;
-import org.slf4j.Logger;
 
 import java.util.*;
 
@@ -16,8 +14,8 @@ import java.util.*;
  * Visual perception system - mobs recognize player equipment and tactics
  * Adapts strategy based on what player is wearing/holding
  */
+@SuppressWarnings({"null", "unused"})
 public class VisualPerception {
-    private static final Logger LOGGER = LogUtils.getLogger();
     
     private final Map<String, PlayerProfile> playerProfiles = new HashMap<>();
     private final Map<UUID, CachedVisualState> visualCache = new HashMap<>();
@@ -240,6 +238,7 @@ public class VisualPerception {
     
     private static class PlayerProfile {
         int encounterCount = 0;
+        @SuppressWarnings("unused")
         String preferredWeapon = "unknown";
         Map<String, Integer> commonActions = new HashMap<>();
         int aggressiveStyle = 0;

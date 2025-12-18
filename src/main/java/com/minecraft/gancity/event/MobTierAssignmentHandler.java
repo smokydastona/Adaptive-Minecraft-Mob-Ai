@@ -10,7 +10,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
-import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.*;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.event.TickEvent;
@@ -35,6 +34,7 @@ import java.util.Random;
  * - Livestock/Pet Overhaul: Skips animals (not hostile mobs)
  */
 @Mod.EventBusSubscriber(modid = GANCityMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+@SuppressWarnings({"null", "unused"})
 public class MobTierAssignmentHandler {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final Random RANDOM = new Random();

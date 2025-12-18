@@ -22,6 +22,7 @@ import java.util.UUID;
  * Players can type messages and nearby villagers respond
  */
 @Mod.EventBusSubscriber(modid = GANCityMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+@SuppressWarnings("null")
 public class VillagerChatHandler {
     private static final Logger LOGGER = LogUtils.getLogger();
     

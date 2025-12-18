@@ -417,7 +417,7 @@ public class TacticKnowledgeBase {
         Map<String, Float> effectivenessList = new HashMap<>();
         
         void recordBehavior(String behavior, boolean effective) {
-            behaviorCount.merge(behavior, 1, Integer::sum);
+            behaviorCount.put(behavior, behaviorCount.getOrDefault(behavior, 0) + 1);
             
             Float currentRate = effectivenessList.getOrDefault(behavior, 0.5f);
             float newRate = effective ?

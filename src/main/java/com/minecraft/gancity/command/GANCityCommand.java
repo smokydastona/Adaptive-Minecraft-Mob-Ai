@@ -18,6 +18,7 @@ import java.util.UUID;
 /**
  * Commands for testing and managing AI features
  */
+@SuppressWarnings("null")
 public class GANCityCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {

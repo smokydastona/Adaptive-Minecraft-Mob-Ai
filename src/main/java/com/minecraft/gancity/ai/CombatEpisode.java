@@ -252,7 +252,8 @@ public class CombatEpisode {
         // Aggregate tactical preferences from this episode
         Map<String, Integer> tacticCounts = new HashMap<>();
         for (TacticalSample sample : samples) {
-            tacticCounts.merge(sample.action.id, 1, Integer::sum);
+            String tacticId = sample.action.id;
+            tacticCounts.put(tacticId, tacticCounts.getOrDefault(tacticId, 0) + 1);
         }
         data.put("tacticsUsed", tacticCounts);
         
@@ -272,7 +273,7 @@ public class CombatEpisode {
         for (TacticalSample sample : samples) {
             String tacticId = sample.action.id;
             float weight = (1.0f / samples.size()) * successMultiplier;
-            weights.merge(tacticId, weight, Float::sum);
+            weights.put(tacticId, weights.getOrDefault(tacticId, 0.0f) + weight);
         }
         
         return weights;
@@ -293,7 +294,8 @@ public class CombatEpisode {
             String tactic = sample.action.id;
             
             situationalTactics.putIfAbsent(situation, new HashMap<>());
-            situationalTactics.get(situation).merge(tactic, successMultiplier, Float::sum);
+            Map<String, Float> tacticMap = situationalTactics.get(situation);
+            tacticMap.put(tactic, tacticMap.getOrDefault(tactic, 0.0f) + successMultiplier);
         }
         
         return situationalTactics;

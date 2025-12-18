@@ -20,6 +20,7 @@ import java.util.zip.GZIPOutputStream;
  * - Compression for smaller file sizes
  * - Backup system for safety
  */
+@SuppressWarnings("unused")
 public class ModelPersistence {
     private static final Logger LOGGER = LogUtils.getLogger();
     

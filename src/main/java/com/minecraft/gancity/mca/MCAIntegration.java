@@ -6,6 +6,7 @@ import net.minecraft.world.level.Level;
 /**
  * Integration with MCA Reborn mod for spawning villagers and managing villages
  */
+@SuppressWarnings("null")
 public class MCAIntegration {
     
     private static boolean mcaLoaded = false;

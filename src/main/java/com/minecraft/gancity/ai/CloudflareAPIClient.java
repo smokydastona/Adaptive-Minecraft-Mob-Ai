@@ -4,8 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.reflect.TypeToken;
 import com.mojang.logging.LogUtils;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import org.slf4j.Logger;
@@ -148,9 +148,6 @@ public class CloudflareAPIClient {
             
             // Mark as dirty for potential batching
             dirtyTracker.markDirty(mobType, action);
-            
-            // Calculate tier based on win rate
-            TacticTier tier = TacticTier.fromWinRate(winRate);
             
             // Build advanced payload for FedAvgM worker
             JsonObject tactics = new JsonObject();
@@ -375,7 +372,7 @@ public class CloudflareAPIClient {
             String response = sendGetRequest("api/stats");
             
             if (response != null) {
-                return gson.fromJson(response, Map.class);
+                return gson.fromJson(response, new TypeToken<Map<String, Object>>() {}.getType());
             }
             
         } catch (Exception e) {
@@ -512,6 +509,7 @@ public class CloudflareAPIClient {
      * Send compressed HTTP POST request with retry logic
      * Uses GZIP compression for bandwidth reduction
      */
+    @SuppressWarnings("unused")
     private String sendCompressedPostRequest(String endpoint, byte[] compressedData) {
         int attempt = 0;
         Exception lastException = null;
@@ -674,6 +672,7 @@ public class CloudflareAPIClient {
     /**
      * Get server ID (for logging/debugging)
      */
+    @SuppressWarnings("unused")
     private String getServerId() {
         return serverId;
     }

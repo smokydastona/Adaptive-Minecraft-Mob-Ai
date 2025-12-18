@@ -12,6 +12,7 @@ import org.joml.Vector3f;
  * Visual indicators for AI tier progression
  * Inspired by Hostile Neural Networks color-coded tiers
  */
+@SuppressWarnings("null")
 public class TierVisualIndicators {
     
     /**

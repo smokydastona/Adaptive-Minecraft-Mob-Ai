@@ -12,6 +12,7 @@ import java.util.*;
  * Curios API integration for detecting trinkets, baubles, and accessories
  * Uses reflection to avoid hard dependency
  */
+@SuppressWarnings("unused")
 public class CuriosIntegration {
     private static final Logger LOGGER = LogUtils.getLogger();
     

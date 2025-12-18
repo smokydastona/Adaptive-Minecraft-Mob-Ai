@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * GPT-style transformer-based dialogue system for villagers
  * Generates natural, context-aware conversations instead of templates
  */
+@SuppressWarnings("unused")
 public class TransformerDialogue {
     private static final Logger LOGGER = LogUtils.getLogger();
     

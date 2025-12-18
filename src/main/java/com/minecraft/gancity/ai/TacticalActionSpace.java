@@ -1,11 +1,8 @@
 package com.minecraft.gancity.ai;
 
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.monster.*;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
-import com.mojang.logging.LogUtils;
-import org.slf4j.Logger;
 
 import java.util.*;
 
@@ -15,8 +12,8 @@ import java.util.*;
  * 
  * This is what federation should aggregate - tactics, not button presses.
  */
+@SuppressWarnings("null")
 public class TacticalActionSpace {
-    private static final Logger LOGGER = LogUtils.getLogger();
     
     /**
      * Tactical actions - each represents a complex behavior pattern
@@ -172,7 +169,6 @@ public class TacticalActionSpace {
         
         private static boolean hasNearbyObstacles(Mob mob) {
             // Quick check for solid blocks nearby (simplified)
-            Vec3 pos = mob.position();
             for (int dx = -3; dx <= 3; dx++) {
                 for (int dz = -3; dz <= 3; dz++) {
                     if (dx == 0 && dz == 0) continue;
@@ -503,7 +499,6 @@ public class TacticalActionSpace {
                 
             case LAYERED_DEFENSE:
                 // Form tactical layers: tanks front, ranged back, support middle
-                List<Mob> layerAllies = getNearbyAllies(mob);
                 boolean isTank = isTankMob(mob);
                 boolean isRanged = isRangedMob(mob);
                 boolean isSupport = isSupportMob(mob);

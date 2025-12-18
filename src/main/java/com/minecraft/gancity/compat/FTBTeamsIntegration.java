@@ -11,6 +11,7 @@ import java.util.*;
  * FTB Teams integration for multiplayer team-based AI coordination
  * Allows mobs to recognize player teams and coordinate attacks accordingly
  */
+@SuppressWarnings("unused")
 public class FTBTeamsIntegration {
     private static final Logger LOGGER = LogUtils.getLogger();
     

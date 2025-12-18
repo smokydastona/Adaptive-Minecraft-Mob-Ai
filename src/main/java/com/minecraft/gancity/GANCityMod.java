@@ -4,8 +4,6 @@ import com.minecraft.gancity.ai.MobBehaviorAI;
 import com.minecraft.gancity.ai.VillagerDialogueAI;
 import com.minecraft.gancity.command.GANCityCommand;
 import com.minecraft.gancity.compat.ModCompatibility;
-import com.minecraft.gancity.compat.CuriosIntegration;
-import com.minecraft.gancity.compat.FTBTeamsIntegration;
 import com.minecraft.gancity.mca.MCAIntegration;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
@@ -25,6 +23,7 @@ import org.slf4j.Logger;
 
 @Mod(GANCityMod.MODID)
 @Mod.EventBusSubscriber(modid = GANCityMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.DEDICATED_SERVER)
+@SuppressWarnings({"removal", "null"})
 public class GANCityMod {
     public static final String MODID = "adaptivemobai";
     public static final Logger LOGGER = LogUtils.getLogger();  // Changed to public for mixin access

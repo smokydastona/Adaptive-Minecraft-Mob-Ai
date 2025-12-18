@@ -4,7 +4,6 @@ import com.minecraft.gancity.GANCityMod;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
-import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.entity.monster.*;
 import net.minecraftforge.fml.ModList;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,6 +21,7 @@ import java.util.EnumSet;
  * - Ice and Fire: Skips dragons and mythical creatures (complex custom AI)
  */
 @Mixin(Mob.class)
+@SuppressWarnings({"null", "unused"})
 public abstract class MobAIEnhancementMixin {
     
     // DIAGNOSTIC: Static initializer to verify mixin class loads

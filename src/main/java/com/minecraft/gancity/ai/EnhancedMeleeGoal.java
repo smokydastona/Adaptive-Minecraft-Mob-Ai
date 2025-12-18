@@ -5,9 +5,7 @@ import com.mojang.logging.LogUtils;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
-import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.monster.Spider;
-import net.minecraftforge.fml.ModList;
 import org.slf4j.Logger;
 
 import java.util.EnumSet;
@@ -17,6 +15,7 @@ import java.util.EnumSet;
  * Uses machine learning to select attack patterns
  * Works via EntityJoinLevelEvent instead of mixin injection
  */
+@SuppressWarnings({"null", "unused"})
 public class EnhancedMeleeGoal extends Goal {
     private static final Logger LOGGER = LogUtils.getLogger();
     

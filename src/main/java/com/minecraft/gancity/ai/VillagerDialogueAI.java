@@ -9,6 +9,7 @@ import java.util.*;
  * AI-powered dialogue generation system for MCA villagers
  * Uses template-based dialogue with personality tracking (ML models optional)
  */
+    @SuppressWarnings("unused")
 public class VillagerDialogueAI {
     private static final Logger LOGGER = LogUtils.getLogger();
     
@@ -284,9 +285,13 @@ public class VillagerDialogueAI {
         }
 
         private void normalizeTraits() {
-            float sum = traits.values().stream().reduce(0f, Float::sum);
+            float sum = 0f;
+            for (float traitValue : traits.values()) {
+                sum += traitValue;
+            }
             if (sum > 0) {
-                traits.replaceAll((k, v) -> v / sum);
+                final float finalSum = sum;
+                traits.replaceAll((k, v) -> v / finalSum);
             }
         }
 
@@ -491,7 +496,6 @@ public class VillagerDialogueAI {
         }
         
         private String generateStatement(VillagerPersonality personality, DialogueContext context) {
-            String feeling = pickRandom(phraseBank.get("feeling"));
             String topic = pickRandom(phraseBank.get("topic"));
             
             if (context.biome != null && random.nextFloat() < 0.3f) {

@@ -2,9 +2,6 @@ package com.minecraft.gancity.ai;
 
 import com.mojang.logging.LogUtils;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
 
 import java.util.*;
@@ -24,6 +21,8 @@ public class AutonomousGoals {
     
     // Goal assignment probabilities
     private static final float GOAL_ASSIGNMENT_CHANCE = 0.15f; // 15% chance per check
+
+    @SuppressWarnings("unused")
     private static final long GOAL_CHECK_INTERVAL = 5000; // Check every 5 seconds
     
     private final Map<UUID, ActiveGoal> activeGoals = new HashMap<>();
@@ -213,7 +212,7 @@ public class AutonomousGoals {
         // Count goals by type
         Map<String, Integer> byType = new HashMap<>();
         for (ActiveGoal goal : activeGoals.values()) {
-            byType.merge(goal.name, 1, Integer::sum);
+            byType.put(goal.name, byType.getOrDefault(goal.name, 0) + 1);
         }
         stats.put("goals_by_type", byType);
         

@@ -20,6 +20,7 @@ import org.slf4j.Logger;
  * - Swimming/climbing optimization
  * - Parkour-style movement
  */
+@SuppressWarnings({"null", "unused"})
 public class PreciseMovement extends MoveControl {
     private static final Logger LOGGER = LogUtils.getLogger();
     
@@ -32,7 +33,6 @@ public class PreciseMovement extends MoveControl {
     // State tracking
     private MovementMode currentMode = MovementMode.NORMAL;
     private Vec3 strafeTarget = null;
-    private float strafeAngle = 0.0f;
     private boolean shouldJump = false;
     private long lastJumpTime = 0;
     private static final long JUMP_COOLDOWN = 400; // ms
@@ -62,10 +62,6 @@ public class PreciseMovement extends MoveControl {
         Vec3 strafePos = target.add(horizontal.scale(radius)).add(strafe.scale(1.5));
         
         setWantedPosition(strafePos.x, strafePos.y, strafePos.z, STRAFE_SPEED);
-        
-        // Increment angle
-        strafeAngle += clockwise ? 15.0f : -15.0f;
-        strafeAngle %= 360.0f;
     }
     
     /**
@@ -155,7 +151,6 @@ public class PreciseMovement extends MoveControl {
         this.currentMode = MovementMode.PARKOUR;
         
         BlockPos currentPos = mob.blockPosition();
-        BlockPos targetPos = new BlockPos((int)destination.x, (int)destination.y, (int)destination.z);
         
         // Check for obstacles
         Level level = mob.level();
@@ -163,7 +158,7 @@ public class PreciseMovement extends MoveControl {
         BlockState blockAhead = level.getBlockState(ahead);
         
         // Auto-jump over 1-block obstacles
-        if (!blockAhead.isAir() && blockAhead.isSolid()) {
+        if (!blockAhead.isAir() && blockAhead.isSolidRender(level, ahead)) {
             BlockState blockAbove = level.getBlockState(ahead.above());
             if (blockAbove.isAir()) {
                 shouldJump = true;

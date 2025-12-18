@@ -4,7 +4,6 @@ import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Genetic Algorithm for evolving mob behaviors over generations

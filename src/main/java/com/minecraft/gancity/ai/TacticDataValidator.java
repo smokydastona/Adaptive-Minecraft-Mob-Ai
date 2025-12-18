@@ -41,7 +41,6 @@ public class TacticDataValidator {
      * @param mobType Mob type (for logging)
      * @return Sanitized tactic data, or null if unrecoverable
      */
-    @SuppressWarnings("unchecked")
     public static Map<String, Object> validateAndSanitize(
             Map<String, Object> tacticData, 
             String action, 
@@ -180,7 +179,6 @@ public class TacticDataValidator {
     /**
      * Validate mob-level aggregated data
      */
-    @SuppressWarnings("unchecked")
     public static boolean validateMobData(Map<String, Object> mobData, String mobType) {
         if (mobData == null) {
             LOGGER.warn("Null mob data for {}", mobType);

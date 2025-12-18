@@ -6,8 +6,6 @@ import ai.djl.nn.SequentialBlock;
 import ai.djl.nn.core.Linear;
 import ai.djl.training.DefaultTrainingConfig;
 import ai.djl.training.Trainer;
-import ai.djl.training.dataset.ArrayDataset;
-import ai.djl.training.evaluator.Accuracy;
 import ai.djl.training.listener.TrainingListener;
 import ai.djl.training.loss.Loss;
 import ai.djl.training.optimizer.Optimizer;
@@ -16,9 +14,6 @@ import ai.djl.ndarray.NDArray;
 import ai.djl.ndarray.NDList;
 import ai.djl.ndarray.NDManager;
 import ai.djl.ndarray.types.Shape;
-import ai.djl.translate.Batchifier;
-import ai.djl.translate.Translator;
-import ai.djl.translate.TranslatorContext;
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
@@ -270,15 +265,8 @@ public class MobLearningModel {
                 targets[i] = qValues;
             }
             
-            // Convert to NDArrays
-            NDArray stateArray = batchManager.create(states);
-            NDArray targetArray = batchManager.create(targets);
-            
             // Training step
             try {
-                NDList data = new NDList(stateArray);
-                NDList labels = new NDList(targetArray);
-                
                 trainer.step();
                 
                 // Decay epsilon

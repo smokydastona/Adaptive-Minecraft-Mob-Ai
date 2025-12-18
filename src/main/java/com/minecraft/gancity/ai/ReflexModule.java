@@ -2,7 +2,6 @@ package com.minecraft.gancity.ai;
 
 import com.mojang.logging.LogUtils;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
@@ -20,6 +19,7 @@ import java.util.*;
  * - Counter-attack windows
  * - Jump-crit timing
  */
+@SuppressWarnings("null")
 public class ReflexModule {
     private static final Logger LOGGER = LogUtils.getLogger();
     

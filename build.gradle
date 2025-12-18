@@ -99,28 +99,24 @@ dependencies {
     }
 
     // FastUtil - High-performance collections
-    // NOT bundled due to Sinytra Connector Jar-in-Jar conflicts
-    implementation 'it.unimi.dsi:fastutil:8.5.12'
+    // Provided by Forge/Minecraft, don't bundle
+    compileOnly 'it.unimi.dsi:fastutil:8.5.12'
 
-    // Deep Java Library (DJL) for ML inference - bundled via jarJar
+    // Deep Java Library (DJL) for ML inference
+    // Lightweight API JARs bundled, native libraries download on first use
     implementation 'ai.djl:api:0.25.0'
-    implementation 'ai.djl:basicdataset:0.25.0'
-    runtimeOnly 'ai.djl.pytorch:pytorch-engine:0.25.0'
-    runtimeOnly 'ai.djl.pytorch:pytorch-model-zoo:0.25.0'
-    implementation 'ai.djl.huggingface:tokenizers:0.25.0'
+    jarJar(group: 'ai.djl', name: 'api', version: '[0.25.0,0.26)')
+    
+    implementation 'ai.djl.pytorch:pytorch-engine:0.25.0'
+    jarJar(group: 'ai.djl.pytorch', name: 'pytorch-engine', version: '[0.25.0,0.26)')
+    
+    // DJL will auto-download PyTorch native libraries (~200MB) on first model load
+    // These are cached in user's home directory and reused across runs
 }
 
 // Configure the regular jar task with the new name
 tasks.named('jar', Jar).configure {
     archiveBaseName = 'Adaptive-Mob-Ai'
-}
-
-// Configure jarJar to be the final output with bundled libraries
-tasks.named('jarJar').configure {
-    archiveBaseName = 'Adaptive-Mob-Ai'
-
-    // Enable jarJar to actually bundle the dependencies
-    jarJar.enable()
 
     manifest {
         attributes([
@@ -136,7 +132,15 @@ tasks.named('jarJar').configure {
     }
 }
 
-// Make build task depend on jarJar to ensure it's created
+// Configure jarJar to bundle lightweight DJL jars (DJL downloads natives on first use)
+tasks.named('jarJar').configure {
+    archiveBaseName = 'Adaptive-Mob-Ai'
+
+    // Enable jarJar to actually bundle the dependencies declared via `jarJar(...)`
+    jarJar.enable()
+}
+
+// Make build use jarJar output
 tasks.named('build').configure {
     dependsOn 'jarJar'
 }

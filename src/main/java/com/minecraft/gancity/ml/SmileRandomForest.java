@@ -162,7 +162,7 @@ public class SmileRandomForest {
             
             // Train Random Forest via reflection
             Class<?> forestClass = Class.forName("smile.classification.RandomForest");
-            Class<?> formulaClass = Class.forName("smile.data.formula.Formula");
+            Class.forName("smile.data.formula.Formula");
             
             // Use simple fit method: RandomForest.fit(x, y)
             randomForest = forestClass.getMethod("fit", double[][].class, int[].class)

@@ -146,7 +146,10 @@ public class MultiAgentLearning {
     }
     
     private static class TeamState {
+        @SuppressWarnings("unused")
         final String teamId;
+
+        @SuppressWarnings("unused")
         final String teamType;
         final List<String> members;
         int combatCount = 0;

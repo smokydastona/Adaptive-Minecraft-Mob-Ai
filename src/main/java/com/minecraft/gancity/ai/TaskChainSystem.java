@@ -2,8 +2,6 @@ package com.minecraft.gancity.ai;
 
 import com.mojang.logging.LogUtils;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.core.BlockPos;
 import org.slf4j.Logger;
 
 import java.util.*;
@@ -249,6 +247,7 @@ public class TaskChainSystem {
      * Template for creating task chains
      */
     private static class TaskChainTemplate {
+        @SuppressWarnings("unused")
         final String name;
         final List<AITask> tasks;
         

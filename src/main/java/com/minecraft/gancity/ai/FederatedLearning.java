@@ -4,7 +4,6 @@ import com.mojang.logging.LogUtils;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import org.slf4j.Logger;
 
-import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -24,6 +23,7 @@ import java.util.concurrent.*;
  * 
  * Worker URL: https://mca-ai-tactics-api.mc-ai-datcol.workers.dev
  */
+@SuppressWarnings("unused")
 public class FederatedLearning {
     private static final Logger LOGGER = LogUtils.getLogger();
     
