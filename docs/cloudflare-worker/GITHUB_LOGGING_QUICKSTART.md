@@ -54,7 +54,7 @@ After federation rounds complete, logs appear in:
   ```json
   {
     "round": 42,
-    "contributors": 5,
+    "contributors": { "servers": 3, "submissions": 5 },
     "mobTypes": ["zombie", "skeleton"],
     "timestamp": "2025-12-14T22:30:00Z"
   }

@@ -146,17 +146,24 @@ Should contain:
 
 ```json
 {
+  "schema": {
+    "name": "mca-ai-enhanced.federation.round",
+    "version": 2
+  },
   "round": 42,
   "timestamp": "2025-12-14T22:30:00.000Z",
-  "contributors": 5,
+  "contributors": {
+    "servers": 3,
+    "submissions": 5
+  },
   "mobTypes": ["zombie", "skeleton", "creeper"],
   "modelStats": {
     "zombie": {
-      "actionCount": 8,
+      "distinctActionsObserved": 8,
       "totalExperiences": 1234
     },
     "skeleton": {
-      "actionCount": 6,
+      "distinctActionsObserved": 6,
       "totalExperiences": 987
     }
   },
@@ -174,8 +181,8 @@ Should contain:
 **File:** `uploads/YYYY-MM-DD.jsonl`
 
 ```jsonl
-{"timestamp":"2025-12-14T10:15:30.000Z","serverId":"server-abc","mobType":"zombie","round":42,"bootstrap":true}
-{"timestamp":"2025-12-14T10:20:15.000Z","serverId":"server-xyz","mobType":"skeleton","round":42,"bootstrap":false}
+{"timestamp":"2025-12-14T10:15:30.000Z","mobType":"zombie","round":42,"bootstrap":true}
+{"timestamp":"2025-12-14T10:20:15.000Z","mobType":"skeleton","round":42,"bootstrap":false}
 ```
 
 **When:** After every upload accepted (can be disabled for less verbosity).

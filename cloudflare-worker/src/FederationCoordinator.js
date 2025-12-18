@@ -52,6 +52,11 @@ export class FederationCoordinator {
     if (path === '/coordinator/heartbeat' && request.method === 'POST') {
       return await this.handleHeartbeat(request);
     }
+
+    // Admin routes (require bearer token)
+    if (path === '/coordinator/admin/reset-round' && request.method === 'POST') {
+      return await this.handleAdminResetRound(request);
+    }
     
     // Tier progression routes
     if (path === '/coordinator/tiers/upload' && request.method === 'POST') {
@@ -76,6 +81,100 @@ export class FederationCoordinator {
     }
 
     return new Response('Not Found', { status: 404 });
+  }
+
+  async handleAdminResetRound(request) {
+    if (!this.env.ADMIN_TOKEN) {
+      return new Response(JSON.stringify({
+        error: 'Admin reset not configured',
+        message: 'Set ADMIN_TOKEN as a Cloudflare secret to enable admin reset operations'
+      }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const auth = request.headers.get('Authorization') || '';
+    const token = auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : '';
+    if (!token || token !== this.env.ADMIN_TOKEN) {
+      return new Response(JSON.stringify({
+        error: 'Unauthorized',
+        message: 'Missing or invalid Authorization bearer token'
+      }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    let body = {};
+    try {
+      body = await request.json();
+    } catch {
+      body = {};
+    }
+
+    const requestedStartRound = typeof body?.startRound === 'number' ? body.startRound : 1;
+    const startRound = Number.isFinite(requestedStartRound) ? Math.floor(requestedStartRound) : 1;
+    if (startRound < 1) {
+      return new Response(JSON.stringify({
+        error: 'Invalid startRound',
+        message: 'startRound must be an integer >= 1'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const before = {
+      currentRound: this.currentRound,
+      modelsInCurrentRound: this.models?.size || 0,
+      contributorsTracked: this.contributors?.size || 0,
+      hasGlobalModel: !!this.globalModel
+    };
+
+    await this.resetFederationState(startRound);
+
+    const after = {
+      currentRound: this.currentRound,
+      modelsInCurrentRound: this.models?.size || 0,
+      contributorsTracked: this.contributors?.size || 0,
+      hasGlobalModel: !!this.globalModel
+    };
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: `Federation state reset; now on round ${this.currentRound}`,
+      before,
+      after
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  async resetFederationState(startRound) {
+    // Clear durable storage first to avoid stale keys
+    if (typeof this.state?.storage?.deleteAll === 'function') {
+      await this.state.storage.deleteAll();
+    } else {
+      // Fallback: clear known keys
+      await this.state.storage.delete('currentRound');
+      await this.state.storage.delete('contributors');
+      await this.state.storage.delete('models');
+      await this.state.storage.delete('globalModel');
+      await this.state.storage.delete('lastAggregation');
+    }
+
+    // Reset in-memory state
+    this.currentRound = startRound;
+    this.contributors = new Map();
+    this.models = new Map();
+    this.globalModel = null;
+    this.lastAggregation = Date.now();
+
+    await this.persistState();
+
+    console.log(`🧹 Admin reset: federation state cleared, round set to ${this.currentRound}`);
   }
 
   /**

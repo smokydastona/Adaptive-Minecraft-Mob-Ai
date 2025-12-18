@@ -176,7 +176,8 @@ export default {
             'POST /api/upload': 'Upload model (include bootstrap=true for first upload)',
             'GET /api/global': 'Download global model (optionally filter by mobType)',
             'POST /api/heartbeat': 'Heartbeat ping (serverId + activeMobs)',
-            'POST /admin/init-github': 'Test GitHub logging (admin only)'
+            'POST /admin/init-github': 'Test GitHub logging (admin only)',
+            'POST /admin/reset-round': 'Reset federation round/state (admin only)'
           },
           clientRequirements: {
             startupPull: 'MUST call GET /api/global on server start (unconditional)',
@@ -237,6 +238,50 @@ export default {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
+      }
+
+      // Admin endpoint - reset federation round/state
+      // Requires ADMIN_TOKEN secret set in Cloudflare (Authorization: Bearer <token>)
+      if (url.pathname === '/admin/reset-round' && request.method === 'POST') {
+        if (!env.ADMIN_TOKEN) {
+          return new Response(JSON.stringify({
+            error: 'Admin reset not configured',
+            message: 'Set ADMIN_TOKEN as a Cloudflare secret to enable admin reset operations'
+          }), {
+            status: 503,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const auth = request.headers.get('Authorization') || '';
+        const token = auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : '';
+        if (!token || token !== env.ADMIN_TOKEN) {
+          return new Response(JSON.stringify({
+            error: 'Unauthorized',
+            message: 'Missing or invalid Authorization bearer token'
+          }), {
+            status: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Forward to coordinator (single global coordinator)
+        const coordinatorId = env.FEDERATION_COORDINATOR.idFromName('global');
+        const coordinator = env.FEDERATION_COORDINATOR.get(coordinatorId);
+
+        const coordinatorReq = new Request('https://coordinator/coordinator/admin/reset-round', {
+          method: 'POST',
+          headers: request.headers,
+          body: request.body
+        });
+
+        const response = await coordinator.fetch(coordinatorReq);
+        const result = await response.json();
+
+        return new Response(JSON.stringify(result), {
+          status: response.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
       }
 
       // Tier progression endpoints (HNN-inspired)
