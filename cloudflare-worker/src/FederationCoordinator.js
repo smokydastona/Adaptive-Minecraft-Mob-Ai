@@ -280,6 +280,17 @@ export class FederationCoordinator {
       }).catch(err => {
         // Silent failure - already logged in GitHubLogger
       });
+      
+      // CRITICAL: Log the actual global model tactics (historical snapshot)
+      // This creates a permanent record of AI evolution over time
+      this.logger.logGlobalModel({
+        round: this.currentRound,
+        timestamp: new Date(this.globalModel.timestamp).toISOString(),
+        contributors: this.models.size,
+        tactics: aggregated
+      }).catch(err => {
+        // Silent failure - never blocks federation
+      });
     }
 
     // Increment round and clear models
