@@ -48,6 +48,9 @@ public class MobBehaviorAI {
     
     // Federated learning (optional)
     private FederatedLearning federatedLearning;
+
+    // Config: allow disabling all learning/training while keeping AI enabled
+    private boolean learningEnabled = true;
     
     // CRITICAL: Performance optimizer (prevents lag with 70+ learning mobs)
     private PerformanceOptimizer performanceOptimizer;
@@ -419,13 +422,10 @@ public class MobBehaviorAI {
      * Enable federated learning with Git repository or cloud API
      */
     public void enableFederatedLearning(String repoUrl, String cloudApiEndpoint, String cloudApiKey) {
-        // Priority: Use Cloud API if available, fallback to Git
-        String effectiveEndpoint = (cloudApiEndpoint != null && !cloudApiEndpoint.isEmpty()) 
-            ? cloudApiEndpoint 
-            : repoUrl;
-        
+        // Privacy/architecture: mod is Cloudflare-only. Git repo usage is deprecated and ignored.
+        String effectiveEndpoint = (cloudApiEndpoint != null && !cloudApiEndpoint.isEmpty()) ? cloudApiEndpoint : null;
         if (effectiveEndpoint == null || effectiveEndpoint.isEmpty()) {
-            LOGGER.info("Federated learning disabled - no repository or API configured");
+            LOGGER.info("Federated learning disabled - no Cloudflare API configured");
             return;
         }
         
@@ -439,14 +439,23 @@ public class MobBehaviorAI {
             if (tacticKnowledgeBase != null) {
                 tacticKnowledgeBase.setFederatedLearning(federatedLearning);
             }
-            
-            if (cloudApiEndpoint != null && !cloudApiEndpoint.isEmpty()) {
-                LOGGER.info("Federated learning enabled - Using Cloudflare API: {}", cloudApiEndpoint);
-            } else {
-                LOGGER.info("Federated learning enabled - Using Git repository: {}", repoUrl);
-            }
+
+            LOGGER.info("Federated learning enabled - Using Cloudflare API: {}", cloudApiEndpoint);
         } catch (Exception e) {
             LOGGER.error("Failed to enable federated learning: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Enable/disable learning from combat outcomes.
+     * When disabled: AI still runs, but does not train/update models or tiers from outcomes.
+     */
+    public void setLearningEnabled(boolean enabled) {
+        this.learningEnabled = enabled;
+        if (enabled) {
+            LOGGER.info("Learning from combat outcomes: ENABLED");
+        } else {
+            LOGGER.info("Learning from combat outcomes: DISABLED");
         }
     }
 
@@ -1547,6 +1556,10 @@ public class MobBehaviorAI {
         
         if (initialState == null || action == null) {
             return;  // No cached data for this mob
+        }
+
+        if (!learningEnabled) {
+            return;
         }
         
         // Extract mob type from mobId (format: "mobType_uuid")

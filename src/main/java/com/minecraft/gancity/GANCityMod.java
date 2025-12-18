@@ -38,6 +38,32 @@ public class GANCityMod {
     private static MobBehaviorAI mobBehaviorAI;
     private static VillagerDialogueAI villagerDialogueAI;
     private static boolean federationInitialized = false;
+
+    // =====================================================
+    // Config (minimal TOML parsing; no ForgeConfigSpec yet)
+    // =====================================================
+    private static final String CONFIG_FILE_NAME = "adaptivemobai-common.toml";
+    private static final String DEFAULT_CLOUDFLARE_ENDPOINT = "https://mca-ai-tactics-api.mc-ai-datcol.workers.dev";
+
+    private static volatile boolean configLoaded = false;
+    private static volatile boolean safeMode = false;
+    private static volatile boolean enableMobAI = true;
+    private static volatile boolean enableVillagerDialogue = true;
+    private static volatile boolean enableLearning = true;
+    private static volatile float aiDifficulty = 1.0f;
+
+    private static volatile boolean enableCrossMobLearning = true;
+    private static volatile float crossMobRewardMultiplier = 3.0f;
+    private static volatile boolean enableContextualDifficulty = true;
+
+    private static volatile boolean enableFederatedLearning = true;
+    private static volatile String cloudApiEndpoint = DEFAULT_CLOUDFLARE_ENDPOINT;
+    private static volatile String cloudApiKey = "";
+
+    private static volatile boolean tierProgressionEnabled = true;
+    private static volatile boolean visualTierIndicators = true;
+    private static volatile float expRateMultiplier = 1.0f;
+    private static volatile boolean syncTiersWithFederation = true;
     
     // Auto-save tracking (10 minutes = 12000 ticks)
     private static final int AUTO_SAVE_INTERVAL_TICKS = 12000;
@@ -181,11 +207,10 @@ public class GANCityMod {
     }
 
     public static MobBehaviorAI getMobBehaviorAI() {
-        // SAFE MODE: Skip AI initialization entirely if safe mode enabled
-        // Read from config file: config/adaptivemobai-common.toml → safeMode = true
-        // This is an emergency fallback for servers with crashes
-        boolean safeMode = false;  // TODO: Load from config file when ForgeConfigSpec is implemented
-        if (safeMode) {
+        loadConfigIfNeeded();
+
+        // SAFE MODE / DISABLE: Skip AI initialization entirely
+        if (safeMode || !enableMobAI) {
             LOGGER.warn("⚠️ SAFE MODE ENABLED - All ML/AI features disabled");
             return null;  // Mixin will skip AI enhancement if null
         }
@@ -195,31 +220,25 @@ public class GANCityMod {
                 if (mobBehaviorAI == null) {
                     LOGGER.info("Lazy-initializing MobBehaviorAI...");
                     mobBehaviorAI = new MobBehaviorAI();
+
+                    // Apply config (defaults are ON; user can disable in config)
+                    try {
+                        mobBehaviorAI.setDifficultyMultiplier(aiDifficulty);
+                        mobBehaviorAI.setLearningEnabled(enableLearning);
+                    } catch (Exception e) {
+                        LOGGER.warn("Could not apply core AI config: {}", e.getMessage());
+                    }
                     
                     // Load cross-mob learning configuration (default enabled)
                     try {
-                        // Default: cross-mob learning enabled with 3x reward multiplier
-                        boolean crossMobEnabled = true;
-                        float crossMobMultiplier = 3.0f;
-                        mobBehaviorAI.setCrossMobLearning(crossMobEnabled, crossMobMultiplier);
-                        
-                        LOGGER.info("✓ Cross-Mob Emergent Learning ENABLED - Mobs can learn tactics from any species!");
-                        LOGGER.info("  Reward multiplier for borrowed tactics: {}x", crossMobMultiplier);
+                        mobBehaviorAI.setCrossMobLearning(enableCrossMobLearning, crossMobRewardMultiplier);
                     } catch (Exception e) {
                         LOGGER.warn("Could not enable cross-mob learning: {}", e.getMessage());
                     }
                     
                     // Load contextual difficulty configuration (default enabled)
                     try {
-                        // Default: contextual difficulty enabled
-                        boolean contextualEnabled = true;
-                        mobBehaviorAI.setContextualDifficulty(contextualEnabled);
-                        
-                        if (contextualEnabled) {
-                            LOGGER.info("✓ Contextual AI Difficulty ENABLED - Harder at night/storms/structures/dimensions");
-                            LOGGER.info("  Night: +30% | Storms: +20% | Thunderstorms: +50%");
-                            LOGGER.info("  Nether: +60% | End: +100% | Near Structures: +40%");
-                        }
+                        mobBehaviorAI.setContextualDifficulty(enableContextualDifficulty);
                     } catch (Exception e) {
                         LOGGER.warn("Could not enable contextual difficulty: {}", e.getMessage());
                     }
@@ -230,6 +249,11 @@ public class GANCityMod {
     }
     
     public static VillagerDialogueAI getVillagerDialogueAI() {
+        loadConfigIfNeeded();
+
+        if (safeMode || !enableVillagerDialogue) {
+            return null;
+        }
         if (villagerDialogueAI == null) {
             synchronized (GANCityMod.class) {
                 if (villagerDialogueAI == null) {
@@ -250,98 +274,41 @@ public class GANCityMod {
      */
     private static void initializeFederatedLearning() {
         try {
-            // Read config (simple properties-based for now)
-            java.nio.file.Path configPath = java.nio.file.Paths.get("config", "adaptivemobai-common.toml");
-            
-            if (!java.nio.file.Files.exists(configPath)) {
-                LOGGER.info("Config file not found, creating default config...");
-                createDefaultConfigFromResources(configPath);
+            loadConfigIfNeeded();
+
+            if (safeMode || !enableMobAI) {
+                LOGGER.info("Federation skipped (safe mode / mob AI disabled)");
+                return;
             }
-            
-            // Parse TOML config
-            java.util.List<String> lines = java.nio.file.Files.readAllLines(configPath);
-            boolean federatedEnabled = true; // Default enabled with hardcoded repo
-            String repoUrl = "https://github.com/smokydastona/Mob-Knowledge.git"; // Hardcoded default
-            String apiEndpoint = "";
-            String apiKey = "";
-            
-            // HNN-inspired tier progression config
-            boolean tierProgressionEnabled = true;
-            boolean visualTierIndicators = true;
-            float expRateMultiplier = 1.0f;
-            boolean syncTiersWithFederation = true;
-            
-            for (String line : lines) {
-                line = line.trim();
-                if (line.contains("enableFederatedLearning") && line.contains("true")) {
-                    federatedEnabled = true;
-                } else if (line.contains("federatedRepoUrl")) {
-                    String[] parts = line.split("=");
-                    if (parts.length > 1) {
-                        repoUrl = parts[1].trim().replace("\"", "").replace("'", "");
-                    }
-                } else if (line.contains("cloudApiEndpoint")) {
-                    String[] parts = line.split("=");
-                    if (parts.length > 1) {
-                        apiEndpoint = parts[1].trim().replace("\"", "").replace("'", "");
-                    }
-                } else if (line.contains("cloudApiKey")) {
-                    String[] parts = line.split("=");
-                    if (parts.length > 1) {
-                        apiKey = parts[1].trim().replace("\"", "").replace("'", "");
-                    }
-                } else if (line.contains("enableTierProgression") && line.contains("false")) {
-                    tierProgressionEnabled = false;
-                } else if (line.contains("enableVisualTierIndicators") && line.contains("false")) {
-                    visualTierIndicators = false;
-                } else if (line.contains("experienceRateMultiplier")) {
-                    String[] parts = line.split("=");
-                    if (parts.length > 1) {
-                        try {
-                            expRateMultiplier = Float.parseFloat(parts[1].trim());
-                        } catch (NumberFormatException e) {
-                            LOGGER.warn("Invalid experienceRateMultiplier in config, using default 1.0");
-                        }
-                    }
-                } else if (line.contains("syncTiersWithFederation") && line.contains("false")) {
-                    syncTiersWithFederation = false;
-                }
+
+            MobBehaviorAI ai = getMobBehaviorAI();
+            if (ai == null) {
+                LOGGER.info("Federation skipped (AI not initialized)");
+                return;
             }
-            
-            if (federatedEnabled && (!repoUrl.isEmpty() || !apiEndpoint.isEmpty())) {
-                LOGGER.info("Enabling federated learning...");
-                LOGGER.info("  Repository: {}", repoUrl.isEmpty() ? "None" : repoUrl);
-                LOGGER.info("  Cloud API: {}", apiEndpoint.isEmpty() ? "None" : apiEndpoint);
-                
-                MobBehaviorAI ai = getMobBehaviorAI();
-                ai.enableFederatedLearning(
-                    repoUrl.isEmpty() ? null : repoUrl,
-                    apiEndpoint.isEmpty() ? null : apiEndpoint,
-                    apiKey.isEmpty() ? null : apiKey
-                );
-                
-                // Test Cloudflare connection
-                if (!apiEndpoint.isEmpty()) {
-                    LOGGER.info("Testing Cloudflare Worker connection...");
-                    boolean connected = ai.testCloudflareConnection();
-                    if (connected) {
-                        LOGGER.info("✓ Cloudflare Worker connected successfully!");
-                    } else {
-                        LOGGER.warn("⚠ Cloudflare Worker connection failed - running in offline mode");
-                    }
+
+            if (enableFederatedLearning && cloudApiEndpoint != null && !cloudApiEndpoint.isEmpty()) {
+                LOGGER.info("Enabling federated learning (Cloudflare only)...");
+                LOGGER.info("  Cloud API: {}", cloudApiEndpoint);
+
+                ai.enableFederatedLearning(null, cloudApiEndpoint, cloudApiKey == null || cloudApiKey.isEmpty() ? null : cloudApiKey);
+
+                LOGGER.info("Testing Cloudflare Worker connection...");
+                boolean connected = ai.testCloudflareConnection();
+                if (connected) {
+                    LOGGER.info("✓ Cloudflare Worker connected successfully!");
+                } else {
+                    LOGGER.warn("⚠ Cloudflare Worker connection failed - running in offline mode");
                 }
-                
-                LOGGER.info("✓ Federated learning enabled - Global AI knowledge sharing active!");
             } else {
                 LOGGER.info("Federated learning disabled in config");
             }
-            
+
             // Configure HNN-inspired tier progression system
             LOGGER.info("Configuring AI tier progression system...");
-            MobBehaviorAI ai = getMobBehaviorAI();
             ai.setTierSystemEnabled(tierProgressionEnabled);
             ai.setVisualTierIndicators(visualTierIndicators);
-            
+
             if (tierProgressionEnabled) {
                 LOGGER.info("✓ AI Tier Progression ENABLED");
                 LOGGER.info("  Visual Indicators: {}", visualTierIndicators ? "ON" : "OFF");
@@ -355,6 +322,122 @@ public class GANCityMod {
         } catch (Exception e) {
             LOGGER.error("Failed to initialize federated learning: {}", e.getMessage());
         }
+    }
+
+    private static void loadConfigIfNeeded() {
+        if (configLoaded) {
+            return;
+        }
+        synchronized (GANCityMod.class) {
+            if (configLoaded) {
+                return;
+            }
+            try {
+                java.nio.file.Path configPath = java.nio.file.Paths.get("config", CONFIG_FILE_NAME);
+                if (!java.nio.file.Files.exists(configPath)) {
+                    LOGGER.info("Config file not found, creating default config...");
+                    createDefaultConfigFromResources(configPath);
+                }
+
+                java.util.Map<String, String> kv = parseTomlKeyValues(configPath);
+
+                safeMode = parseBoolean(kv, "safeMode", false);
+                enableMobAI = parseBoolean(kv, "enableMobAI", true);
+                enableVillagerDialogue = parseBoolean(kv, "enableVillagerDialogue", true);
+                enableLearning = parseBoolean(kv, "enableLearning", true);
+                aiDifficulty = parseFloat(kv, "aiDifficulty", 1.0f);
+
+                enableCrossMobLearning = parseBoolean(kv, "enableCrossMobLearning", true);
+                crossMobRewardMultiplier = parseFloat(kv, "crossMobRewardMultiplier", 3.0f);
+                enableContextualDifficulty = parseBoolean(kv, "enableContextualDifficulty", true);
+
+                enableFederatedLearning = parseBoolean(kv, "enableFederatedLearning", true);
+                cloudApiEndpoint = parseString(kv, "cloudApiEndpoint", DEFAULT_CLOUDFLARE_ENDPOINT);
+                if (cloudApiEndpoint == null || cloudApiEndpoint.isEmpty()) {
+                    cloudApiEndpoint = DEFAULT_CLOUDFLARE_ENDPOINT;
+                }
+                cloudApiKey = parseString(kv, "cloudApiKey", "");
+
+                tierProgressionEnabled = parseBoolean(kv, "enableTierProgression", true);
+                visualTierIndicators = parseBoolean(kv, "enableVisualTierIndicators", true);
+                expRateMultiplier = parseFloat(kv, "experienceRateMultiplier", 1.0f);
+                syncTiersWithFederation = parseBoolean(kv, "syncTiersWithFederation", true);
+
+                configLoaded = true;
+            } catch (Exception e) {
+                // Fail open with safe defaults (ON) so players have zero setup.
+                LOGGER.warn("Failed to load config; using built-in defaults: {}", e.getMessage());
+                configLoaded = true;
+            }
+        }
+    }
+
+    private static java.util.Map<String, String> parseTomlKeyValues(java.nio.file.Path configPath) throws java.io.IOException {
+        java.util.Map<String, String> kv = new java.util.HashMap<>();
+        java.util.List<String> lines = java.nio.file.Files.readAllLines(configPath);
+        for (String rawLine : lines) {
+            String line = rawLine;
+            int hashIdx = line.indexOf('#');
+            if (hashIdx >= 0) {
+                line = line.substring(0, hashIdx);
+            }
+            line = line.trim();
+            if (line.isEmpty() || line.startsWith("[")) {
+                continue;
+            }
+            int eqIdx = line.indexOf('=');
+            if (eqIdx <= 0) {
+                continue;
+            }
+            String key = line.substring(0, eqIdx).trim();
+            String value = line.substring(eqIdx + 1).trim();
+            kv.put(key, value);
+        }
+        return kv;
+    }
+
+    private static boolean parseBoolean(java.util.Map<String, String> kv, String key, boolean defaultValue) {
+        String value = kv.get(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        value = stripQuotes(value).trim();
+        if (value.equalsIgnoreCase("true")) return true;
+        if (value.equalsIgnoreCase("false")) return false;
+        return defaultValue;
+    }
+
+    private static float parseFloat(java.util.Map<String, String> kv, String key, float defaultValue) {
+        String value = kv.get(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        value = stripQuotes(value).trim();
+        try {
+            return Float.parseFloat(value);
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    private static String parseString(java.util.Map<String, String> kv, String key, String defaultValue) {
+        String value = kv.get(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        value = stripQuotes(value).trim();
+        return value;
+    }
+
+    private static String stripQuotes(String value) {
+        if (value == null) {
+            return null;
+        }
+        String v = value.trim();
+        if ((v.startsWith("\"") && v.endsWith("\"")) || (v.startsWith("'") && v.endsWith("'"))) {
+            return v.substring(1, v.length() - 1);
+        }
+        return v;
     }
     
     /**
