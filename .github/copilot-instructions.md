@@ -1,4 +1,4 @@
-# MCA AI Enhanced - Copilot Instructions
+# ADAPTIVE MOB AI - Copilot Instructions
 
 ## Workflow After Every Code Change
 
@@ -10,6 +10,7 @@
 4. **Explain every change** - What was wrong, what you changed, and why
 5. **Push to GitHub Actions** - Commit and push ONLY (no tagging)
 6. **Only stop when 100% validated** - Continue until all files are completely correct and compile without errors
+7. **Update documentation if needed** - Reflect any code changes in relevant docs
 
 ## Compilation Workflow
 
