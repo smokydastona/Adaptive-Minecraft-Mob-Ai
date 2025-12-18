@@ -122,7 +122,7 @@ public class MobTierAssignmentHandler {
         // Apply difficulty multiplier to mob stats
         applyTierModifiers(mob, tier);
         
-        LOGGER.info("[Tier System] Assigned {} tier to {} (UUID: {}) - Health: {}/{}", 
+        LOGGER.debug("[Tier System] Assigned {} tier to {} (UUID: {}) - Health: {}/{}", 
             tier.getName().toUpperCase(), 
             mob.getType().getDescription().getString(),
             mob.getUUID(),
@@ -221,7 +221,7 @@ public class MobTierAssignmentHandler {
         float finalSpeed = (float) mob.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED).getBaseValue();
         if (Math.abs(finalSpeed - originalSpeed) > 0.001f) {
             float percentChange = (finalSpeed / originalSpeed - 1.0f) * 100.0f;
-            LOGGER.info("[Tier System] Speed modifier applied: {} -> {} ({}{}%)",
+            LOGGER.debug("[Tier System] Speed modifier applied: {} -> {} ({}{}%)",
                     String.format("%.3f", originalSpeed),
                     String.format("%.3f", finalSpeed),
                     finalSpeed > originalSpeed ? "+" : "",
