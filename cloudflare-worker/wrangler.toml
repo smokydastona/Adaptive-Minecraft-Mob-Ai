@@ -1,5 +1,5 @@
 name = "mca-ai-tactics-api"
-main = "worker-v3.js"
+main = "worker.js"
 compatibility_date = "2024-01-01"
 
 # Workers.dev subdomain
