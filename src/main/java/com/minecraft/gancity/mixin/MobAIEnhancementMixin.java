@@ -38,46 +38,58 @@ public abstract class MobAIEnhancementMixin {
      */
     @Inject(method = "registerGoals", at = @At("TAIL"))
     private void onRegisterGoals(CallbackInfo ci) {
-        Mob mob = (Mob)(Object)this;
-        
-        // Ice and Fire compatibility - skip their mobs entirely
-        if (ICE_AND_FIRE_LOADED) {
-            String entityId = mob.getType().toString();
-            if (entityId.contains("iceandfire:")) {
-                return; // Don't modify Ice and Fire entity AI
+        try {
+            // SAFE MODE CHECK: Skip AI if safe mode enabled or initialization failed
+            MobBehaviorAI behaviorAI = GANCityMod.getMobBehaviorAI();
+            if (behaviorAI == null) {
+                return;  // Safe mode or initialization failure - use vanilla AI
             }
-        }
-        
-        // Check if this is ANY villager (MCA or vanilla)
-        String className = mob.getClass().getName();
-        boolean isMCAVillager = className.contains("mca.entity.VillagerEntityMCA") || 
-                                className.contains("mca.entity.ai");
-        boolean isVanillaVillager = mob instanceof net.minecraft.world.entity.npc.Villager;
-        
-        if (isMCAVillager) {
-            // MCA villagers get unique combat AI (for guards, self-defense)
-            // Lower priority (6) to not override MCA's core behavior
-            // enableEnvironmental = false (no block breaking/pillaring)
-            mob.goalSelector.addGoal(6, new AIEnhancedMeleeGoal(mob, 1.0, false, false, true));
-            return;
-        }
-        
-        if (isVanillaVillager) {
-            // Vanilla villagers ALSO get persistent profiles! (works without MCA)
-            // Priority 7 to not override vanilla profession behavior
-            // enableEnvironmental = false (villagers don't break blocks)
-            mob.goalSelector.addGoal(7, new AIEnhancedMeleeGoal(mob, 1.0, false, false, true));
-            return;
-        }
-        
-        // Add AI-enhanced combat/survival goal to ALL other mobs
-        // Hostile mobs learn combat tactics, passive mobs learn evasion and survival
-        if (mob instanceof Monster) {
-            // Hostile mobs get aggressive AI with environmental tactics
-            mob.goalSelector.addGoal(2, new AIEnhancedMeleeGoal(mob, 1.0, true, true, false));
-        } else {
-            // Neutral and passive mobs get survival/evasion AI (lower priority to not override core behavior)
-            mob.goalSelector.addGoal(5, new AIEnhancedMeleeGoal(mob, 1.2, false, true, false));
+            
+            Mob mob = (Mob)(Object)this;
+            
+            // Ice and Fire compatibility - skip their mobs entirely
+            if (ICE_AND_FIRE_LOADED) {
+                String entityId = mob.getType().toString();
+                if (entityId.contains("iceandfire:")) {
+                    return; // Don't modify Ice and Fire entity AI
+                }
+            }
+            
+            // Check if this is ANY villager (MCA or vanilla)
+            String className = mob.getClass().getName();
+            boolean isMCAVillager = className.contains("mca.entity.VillagerEntityMCA") || 
+                                    className.contains("mca.entity.ai");
+            boolean isVanillaVillager = mob instanceof net.minecraft.world.entity.npc.Villager;
+            
+            if (isMCAVillager) {
+                // MCA villagers get unique combat AI (for guards, self-defense)
+                // Lower priority (6) to not override MCA's core behavior
+                // enableEnvironmental = false (no block breaking/pillaring)
+                mob.goalSelector.addGoal(6, new AIEnhancedMeleeGoal(mob, 1.0, false, false, true));
+                return;
+            }
+            
+            if (isVanillaVillager) {
+                // Vanilla villagers ALSO get persistent profiles! (works without MCA)
+                // Priority 7 to not override vanilla profession behavior
+                // enableEnvironmental = false (villagers don't break blocks)
+                mob.goalSelector.addGoal(7, new AIEnhancedMeleeGoal(mob, 1.0, false, false, true));
+                return;
+            }
+            
+            // Add AI-enhanced combat/survival goal to ALL other mobs
+            // Hostile mobs learn combat tactics, passive mobs learn evasion and survival
+            if (mob instanceof Monster) {
+                // Hostile mobs get aggressive AI with environmental tactics
+                mob.goalSelector.addGoal(2, new AIEnhancedMeleeGoal(mob, 1.0, true, true, false));
+            } else {
+                // Neutral and passive mobs get survival/evasion AI (lower priority to not override core behavior)
+                mob.goalSelector.addGoal(5, new AIEnhancedMeleeGoal(mob, 1.2, false, true, false));
+            }
+        } catch (Throwable t) {
+            // CRITICAL: Catch all errors to prevent mixin from breaking Forge init
+            // Log and continue - mob will just use vanilla AI
+            GANCityMod.LOGGER.error("❌ MobAIEnhancementMixin failed for mob (using vanilla AI): {}", t.getMessage());
         }
     }
     

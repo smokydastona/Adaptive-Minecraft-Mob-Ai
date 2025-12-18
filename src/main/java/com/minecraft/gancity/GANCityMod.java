@@ -27,7 +27,7 @@ import org.slf4j.Logger;
 @Mod.EventBusSubscriber(modid = GANCityMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.DEDICATED_SERVER)
 public class GANCityMod {
     public static final String MODID = "adaptivemobai";
-    private static final Logger LOGGER = LogUtils.getLogger();
+    public static final Logger LOGGER = LogUtils.getLogger();  // Changed to public for mixin access
     
     private static MobBehaviorAI mobBehaviorAI;
     private static VillagerDialogueAI villagerDialogueAI;
@@ -170,6 +170,15 @@ public class GANCityMod {
     }
 
     public static MobBehaviorAI getMobBehaviorAI() {
+        // SAFE MODE: Skip AI initialization entirely if safe mode enabled
+        // Read from config file: config/adaptivemobai-common.toml → safeMode = true
+        // This is an emergency fallback for servers with crashes
+        boolean safeMode = false;  // TODO: Load from config file when ForgeConfigSpec is implemented
+        if (safeMode) {
+            LOGGER.warn("⚠️ SAFE MODE ENABLED - All ML/AI features disabled");
+            return null;  // Mixin will skip AI enhancement if null
+        }
+        
         if (mobBehaviorAI == null) {
             synchronized (GANCityMod.class) {
                 if (mobBehaviorAI == null) {

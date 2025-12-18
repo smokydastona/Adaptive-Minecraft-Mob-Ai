@@ -256,8 +256,10 @@ public class MobBehaviorAI {
         }
         
         try {
-            // Check if DJL is available (optional dependency)
+            // CRITICAL: Check if DJL is available (must catch Throwable for native lib failures)
             Class.forName("ai.djl.nn.Block");
+            Class.forName("ai.djl.Model");
+            Class.forName("ai.djl.ndarray.NDManager");
             
             // Core learning - 22 input features (state + visual + genome)
             doubleDQN = new DoubleDQN();  // Uses default 22 state features, 10 actions
@@ -301,18 +303,28 @@ public class MobBehaviorAI {
             // Load saved models if available
             modelPersistence.loadAll(doubleDQN, replayBuffer, tacticKnowledgeBase);
             
+            // SUCCESS: ML fully initialized
+            mlEnabled = true;
             String mlSystems = buildMLSystemsString();
-            LOGGER.info("Advanced ML systems initialized - {}", mlSystems);
-            LOGGER.info("Tactical system enabled - mobs will learn high-level combat patterns");
+            LOGGER.info("✅ Advanced ML systems initialized - {}", mlSystems);
+            LOGGER.info("✅ Tactical system enabled - mobs will learn high-level combat patterns");
             initializationAttempted = true;
-        } catch (ClassNotFoundException e) {
-            LOGGER.info("DJL not available, using rule-based AI only (this is normal for development)");
+        } catch (Throwable t) {  // CRITICAL: Catch Throwable to handle native library failures
+            // Permanently disable ML if DJL fails (common on servers without native libs)
             mlEnabled = false;
+            doubleDQN = null;
+            replayBuffer = null;
+            multiAgent = null;
+            performanceOptimizer = null;
+            tacticalAggregator = null;
             initializationAttempted = true;
-        } catch (Exception e) {
-            LOGGER.warn("Failed to initialize ML systems, using rule-based fallback: {}", e.getMessage());
-            mlEnabled = false;
-            initializationAttempted = true;
+            
+            if (t instanceof ClassNotFoundException) {
+                LOGGER.info("❌ DJL not available, using rule-based AI only (this is normal for development)");
+            } else {
+                LOGGER.error("❌ Failed to initialize ML systems (native library issue?), permanently disabled ML. Using rule-based fallback only.", t);
+            }
+            LOGGER.info("ℹ️  Mod will continue with rule-based AI (no ML features)");
         }
     }
     
@@ -1293,7 +1305,7 @@ public class MobBehaviorAI {
         List<String> actions = new ArrayList<>(profile.getActions());
         
         // EMERGENT LEARNING: Add successful tactics from other mob types
-        if (crossMobLearningEnabled && federatedLearning != null) {
+        if (crossMobLearningEnabled && federatedLearning != null && federatedLearning.isEnabled()) {
             List<FederatedLearning.GlobalTactic> bestGlobalTactics = federatedLearning.getBestGlobalTactics(20);
             
             for (FederatedLearning.GlobalTactic tactic : bestGlobalTactics) {
@@ -2329,7 +2341,7 @@ public class MobBehaviorAI {
             long duration = System.currentTimeMillis() - startTime;
             
             // Submit to Cloudflare asynchronously
-            if (federatedLearning != null) {
+            if (federatedLearning != null && federatedLearning.isEnabled()) {
                 federatedLearning.submitSequenceAsync(mobType, sequence, outcome, duration, mobId);
             }
         }
@@ -2366,7 +2378,7 @@ public class MobBehaviorAI {
      * Refresh meta-learning cache from Cloudflare
      */
     private void refreshMetaLearningCache() {
-        if (federatedLearning == null) return;
+        if (federatedLearning == null || !federatedLearning.isEnabled()) return;
         
         try {
             Map<String, List<MetaLearningRecommendation>> newCache = 
@@ -2499,11 +2511,11 @@ public class MobBehaviorAI {
         }
         
         // Submit to federation if enabled
-        if (federatedLearning != null) {
+        if (federatedLearning != null && federatedLearning.isEnabled()) {
             LOGGER.info("Submitting episode to federation...");
             federatedLearning.submitEpisodeAsync(episode, outcome, playerId);
         } else {
-            LOGGER.warn("Federation learning is null - cannot submit episode");
+            LOGGER.debug("Federation disabled or unavailable - episode not submitted to global pool");
         }
     }
     

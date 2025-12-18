@@ -6,6 +6,12 @@
 [general]
 	# === Core Settings ===
 	
+	#Safe Mode: Disable all ML/AI features entirely (emergency fallback)
+	#When true: Completely disables machine learning, federated learning, and advanced AI
+	#Use this if experiencing crashes or performance issues
+	#All mobs will use vanilla behavior only
+	safeMode = false
+	
 	#Enable AI-enhanced mob behavior
 	#When true: Mobs use machine learning to adapt tactics
 	#When false: Mobs use vanilla behavior

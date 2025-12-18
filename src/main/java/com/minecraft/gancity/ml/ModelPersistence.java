@@ -151,20 +151,29 @@ public class ModelPersistence {
             return;
         }
         
+        Path modelPath = modelDirectory.resolve(DOUBLE_DQN_FILE);
+        
         try {
-            Path policyPath = modelDirectory.resolve(DOUBLE_DQN_FILE);
-            
-            if (!Files.exists(policyPath)) {
+            if (!Files.exists(modelPath)) {
                 LOGGER.info("No saved DoubleDQN model found, starting fresh");
                 return;
             }
             
             dqn.load(modelDirectory);
             
-            LOGGER.info("Loaded DoubleDQN model from {}", modelDirectory);
+            LOGGER.info("✅ Loaded DoubleDQN model from {}", modelDirectory);
             
         } catch (IOException | ai.djl.MalformedModelException e) {
-            LOGGER.error("Failed to load DoubleDQN model", e);
+            LOGGER.error("❌ Failed to load DoubleDQN model - model may be corrupted. Deleting and starting fresh.", e);
+            // Delete corrupted model file to prevent future load attempts
+            try {
+                Files.deleteIfExists(modelPath);
+                LOGGER.info("Deleted corrupted model file: {}", modelPath);
+            } catch (IOException deleteError) {
+                LOGGER.warn("Could not delete corrupted model: {}", deleteError.getMessage());
+            }
+            // Re-throw to trigger ML disable in parent
+            throw new RuntimeException("Model load failed", e);
         }
     }
     
