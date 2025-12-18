@@ -161,6 +161,13 @@ public abstract class MobAIEnhancementMixin {
             this.behaviorAI = GANCityMod.getMobBehaviorAI();
             this.mobId = mob.getUUID().toString();
             
+            // CRITICAL DEBUG: Check if behaviorAI is null
+            if (this.behaviorAI == null) {
+                org.apache.logging.log4j.LogManager.getLogger().error("❌ [MIXIN-CRITICAL] behaviorAI is NULL in constructor! getMobBehaviorAI() returned null for {}", mob.getClass().getSimpleName());
+            } else {
+                org.apache.logging.log4j.LogManager.getLogger().info("✅ [MIXIN-OK] behaviorAI successfully initialized for {}", mob.getClass().getSimpleName());
+            }
+            
             initReflection();  // Initialize reflection for MobState creation
             
             // VILLAGERS: Assign permanent tactical profile on creation (MCA or vanilla)

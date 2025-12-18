@@ -111,10 +111,41 @@ public class CloudflareAPIClient {
     /**
      * Submit a learned tactic with bootstrap flag (Legacy endpoint)
      * New v3.0 worker uses /api/upload with FedAvgM aggregation
+     * ✅ HARDENED: Validates data before submission
      * @param bootstrap If true, this is a first-encounter upload (bypasses round restrictions)
      */
     public boolean submitTactic(String mobType, String action, float reward, String outcome, float winRate, boolean bootstrap) {
         try {
+            // ✅ VALIDATE INPUTS BEFORE SUBMISSION
+            if (mobType == null || mobType.isEmpty()) {
+                LOGGER.error("Cannot submit tactic with null/empty mobType");
+                return false;
+            }
+            
+            if (action == null || action.isEmpty()) {
+                LOGGER.error("Cannot submit tactic with null/empty action for {}", mobType);
+                return false;
+            }
+            
+            // Clamp winRate to valid range [0.0, 1.0]
+            if (winRate < 0.0f || winRate > 1.0f) {
+                LOGGER.warn("Invalid winRate {} for {}: {} - clamping to [0.0, 1.0]", 
+                    winRate, mobType, action);
+                winRate = Math.max(0.0f, Math.min(1.0f, winRate));
+            }
+            
+            // Validate reward is reasonable (prevent overflow attacks)
+            if (Float.isNaN(reward) || Float.isInfinite(reward)) {
+                LOGGER.error("Cannot submit tactic with NaN/Infinite reward for {}: {}", mobType, action);
+                return false;
+            }
+            
+            if (Math.abs(reward) > 100.0f) {
+                LOGGER.warn("Suspiciously large reward {} for {}: {} - capping at ±100", 
+                    reward, mobType, action);
+                reward = Math.max(-100.0f, Math.min(100.0f, reward));
+            }
+            
             // Mark as dirty for potential batching
             dirtyTracker.markDirty(mobType, action);
             
@@ -124,16 +155,31 @@ public class CloudflareAPIClient {
             // Build advanced payload for FedAvgM worker
             JsonObject tactics = new JsonObject();
             JsonObject tacticData = new JsonObject();
+            
+            // ✅ ENFORCE INVARIANTS: Create data with correct counts
+            int successCount = Math.round(winRate);  // 1 if winRate >= 0.5, 0 otherwise
+            int failureCount = 1 - successCount;
+            int totalCount = 1;
+            
             tacticData.addProperty("avgReward", reward);
-            tacticData.addProperty("count", 1);
+            tacticData.addProperty("totalReward", reward);
+            tacticData.addProperty("count", totalCount);
+            tacticData.addProperty("successCount", successCount);
+            tacticData.addProperty("failureCount", failureCount);
             tacticData.addProperty("successRate", winRate);
+            tacticData.addProperty("weightedAvgReward", reward);  // Initialize momentum state
+            tacticData.addProperty("momentum", 0.0);  // Initialize velocity
+            tacticData.addProperty("lastUpdate", System.currentTimeMillis());
+            
             tactics.add(action, tacticData);
             
             JsonObject payload = new JsonObject();
             payload.addProperty("mobType", mobType);
             payload.addProperty("serverId", serverId);
+            payload.addProperty("aggregationMethod", "FedAvgM");
             payload.add("tactics", tactics);
             payload.addProperty("timestamp", System.currentTimeMillis());
+            payload.addProperty("version", 1);
             if (bootstrap) {
                 payload.addProperty("bootstrap", true);
             }
@@ -142,7 +188,7 @@ public class CloudflareAPIClient {
             
             // Use advanced FedAvgM endpoint
             String response = sendPostRequest("api/upload", jsonPayload);
-            LOGGER.debug("Submitted tactic via FedAvgM: {} - {} (reward: {}, winRate: {})", 
+            LOGGER.debug("Submitted validated tactic via FedAvgM: {} - {} (reward: {}, winRate: {})", 
                 mobType, action, reward, winRate);
             
             if (response != null) {

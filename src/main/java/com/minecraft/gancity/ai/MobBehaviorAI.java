@@ -266,7 +266,10 @@ public class MobBehaviorAI {
      * SMART RETRY: Attempts initialization up to 5 times with exponential backoff
      */
     private void initializeAdvancedMLSystems() {
+        LOGGER.warn("🔧 [ML-INIT] Starting ML initialization (attempt {}/{})", initializationRetries + 1, MAX_INIT_RETRIES);
+        
         if (doubleDQN != null) {
+            LOGGER.info("[ML-INIT] Already initialized, skipping");
             return; // Already initialized successfully
         }
         
@@ -1049,6 +1052,13 @@ public class MobBehaviorAI {
      * PERFORMANCE: Throttled to think every 15 ticks (15x speedup)
      */
     public String selectMobAction(String mobType, MobState state, String mobId, Player target) {
+        // DIAGNOSTIC: Log every 100 calls to confirm this method runs
+        if (globalTick % 100 == 0) {
+            LOGGER.info("[ML-DEBUG] selectMobAction called {} times, mlEnabled={}, doubleDQN={}, lastInitAttempt={}ms ago",
+                globalTick, mlEnabled, (doubleDQN != null ? "LOADED" : "NULL"), 
+                (System.currentTimeMillis() - lastInitAttemptTime));
+        }
+        
         // CRITICAL FIX #5: Limit action frequency - don't think every tick
         // Use dynamic think interval based on mob type and tier
         globalTick++;
@@ -1076,10 +1086,18 @@ public class MobBehaviorAI {
         // FIX: Allow combat-triggered ML initialization retries (removed !initializationAttempted check)
         // This ensures ML can initialize during combat even if startup initialization failed
         // Add cooldown to prevent spam: only retry if 5+ seconds since last attempt
-        if (mlEnabled && doubleDQN == null && 
-            (System.currentTimeMillis() - lastInitAttemptTime) > 5000) {
-            LOGGER.info("Combat detected - attempting deferred ML initialization (retry #{})", initializationRetries + 1);
+        
+        // DIAGNOSTIC: Log the condition check
+        long timeSinceLastAttempt = System.currentTimeMillis() - lastInitAttemptTime;
+        if (globalTick % 20 == 0) { // Log every second
+            LOGGER.info("[ML-DEBUG] Init check: mlEnabled={}, doubleDQN={}, timeSinceLastAttempt={}ms, threshold=5000ms",
+                mlEnabled, (doubleDQN != null ? "LOADED" : "NULL"), timeSinceLastAttempt);
+        }
+        
+        if (mlEnabled && doubleDQN == null && timeSinceLastAttempt > 5000) {
+            LOGGER.warn("⚡ COMBAT TRIGGERED ML INITIALIZATION - Attempt #{}", initializationRetries + 1);
             initializeAdvancedMLSystems();
+            LOGGER.info("[ML-DEBUG] After init attempt: doubleDQN={}", (doubleDQN != null ? "LOADED" : "STILL NULL"));
         }
 
         String selectedAction;

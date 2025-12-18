@@ -350,6 +350,7 @@ public class FederatedLearning {
     /**
      * Apply downloaded global tactics to local AI systems
      * REVOLUTIONARY: Makes tactics from ALL mob types available for cross-species learning
+     * ✅ HARDENED: Validates all data for mathematical consistency before applying
      */
     @SuppressWarnings("unchecked")
     private void applyGlobalTactics(Map<String, Object> tacticsData) {
@@ -358,33 +359,74 @@ public class FederatedLearning {
             if (tactics == null) return;
             
             int totalTacticsLoaded = 0;
+            int totalTacticsRejected = 0;
             
             for (Map.Entry<String, Object> entry : tactics.entrySet()) {
                 String mobType = entry.getKey();
                 Map<String, Object> mobData = (Map<String, Object>) entry.getValue();
                 
+                // ✅ VALIDATE MOB-LEVEL DATA
+                if (!TacticDataValidator.validateMobData(mobData, mobType)) {
+                    LOGGER.error("❌ Invalid mob data for {} - skipping entire mob type", mobType);
+                    totalTacticsRejected++;
+                    continue;
+                }
+                
+                // ✅ VALIDATE AND SANITIZE ALL TACTICS FOR THIS MOB
+                int validTacticsCount = TacticDataValidator.validateAndSanitizeAllTactics(mobData, mobType);
+                if (validTacticsCount == 0) {
+                    LOGGER.warn("No valid tactics for {} after validation - skipping", mobType);
+                    continue;
+                }
+                
                 List<Map<String, Object>> tacticList = (List<Map<String, Object>>) mobData.get("tactics");
                 if (tacticList != null && !tacticList.isEmpty()) {
-                    LOGGER.debug("Received {} global tactics for {}", tacticList.size(), mobType);
+                    LOGGER.debug("Received {} global tactics for {} ({} validated)", 
+                        tacticList.size(), mobType, validTacticsCount);
                     
                     // Store tactics in global pool for cross-mob learning
                     Map<String, GlobalTactic> mobTactics = globalTacticPool.computeIfAbsent(
                         mobType, k -> new ConcurrentHashMap<>());
                     
                     for (Map<String, Object> tacticData : tacticList) {
+                        // ✅ FINAL PER-TACTIC VALIDATION (belt and suspenders)
                         String action = (String) tacticData.get("action");
-                        Object avgRewardObj = tacticData.get("avgReward");
+                        Map<String, Object> validated = TacticDataValidator.validateAndSanitize(
+                            tacticData, action, mobType);
                         
+                        if (validated == null) {
+                            LOGGER.warn("❌ Rejected invalid tactic {}: {} after validation", mobType, action);
+                            totalTacticsRejected++;
+                            continue;
+                        }
+                        
+                        // Extract validated fields
+                        Object avgRewardObj = validated.get("avgReward");
                         float avgReward = 0.0f;
                         if (avgRewardObj instanceof Number) {
                             avgReward = ((Number) avgRewardObj).floatValue();
+                        }
+                        
+                        // Extract momentum state if using FedAvgM
+                        float momentum = 0.0f;
+                        Object momentumObj = validated.get("momentum");
+                        if (momentumObj instanceof Number) {
+                            momentum = ((Number) momentumObj).floatValue();
+                        }
+                        
+                        float weightedAvgReward = avgReward;
+                        Object weightedObj = validated.get("weightedAvgReward");
+                        if (weightedObj instanceof Number) {
+                            weightedAvgReward = ((Number) weightedObj).floatValue();
                         }
                         
                         GlobalTactic tactic = new GlobalTactic(
                             mobType, 
                             action, 
                             avgReward,
-                            System.currentTimeMillis()
+                            System.currentTimeMillis(),
+                            momentum,
+                            weightedAvgReward
                         );
                         
                         mobTactics.put(action, tactic);
@@ -401,8 +443,8 @@ public class FederatedLearning {
             }
             
             if (totalTacticsLoaded > 0) {
-                LOGGER.info("✓ Loaded {} global tactics from {} mob types into cross-species pool", 
-                    totalTacticsLoaded, globalTacticPool.size());
+                LOGGER.info("✓ Loaded {} validated tactics from {} mob types ({} rejected)", 
+                    totalTacticsLoaded, globalTacticPool.size(), totalTacticsRejected);
                 
                 // Prune to prevent unbounded growth
                 pruneGlobalTacticPool();
@@ -411,6 +453,9 @@ public class FederatedLearning {
                 if (Math.random() < EXPLORATION_RATE) {
                     reintroducePrunedTactics(tacticsData);
                 }
+            } else if (totalTacticsRejected > 0) {
+                LOGGER.error("❌ ALL {} tactics rejected due to validation failures - federation data is poisoned!", 
+                    totalTacticsRejected);
             }
             
         } catch (Exception e) {
@@ -807,6 +852,7 @@ public class FederatedLearning {
     
     /**
      * Tactic submission aggregator - collects outcomes before API submission
+     * ✅ HARDENED: Enforces mathematical invariants at all times
      */
     private static class TacticSubmission {
         public final String mobType;
@@ -814,6 +860,7 @@ public class FederatedLearning {
         
         private float totalReward = 0.0f;
         private int successCount = 0;
+        private int failureCount = 0;
         private int totalCount = 0;
         
         public TacticSubmission(String mobType, String action) {
@@ -821,41 +868,120 @@ public class FederatedLearning {
             this.action = action;
         }
         
+        /**
+         * Add an outcome and enforce invariants
+         * ✅ count == successCount + failureCount ALWAYS
+         */
         public void addOutcome(float reward, boolean success) {
+            // Validate reward
+            if (Float.isNaN(reward) || Float.isInfinite(reward)) {
+                LOGGER.warn("Rejected NaN/Infinite reward for {}: {}", mobType, action);
+                return;
+            }
+            
             totalReward += reward;
             totalCount++;
-            if (success) successCount++;
+            
+            if (success) {
+                successCount++;
+            } else {
+                failureCount++;
+            }
+            
+            // ✅ ASSERT INVARIANT
+            assert totalCount == successCount + failureCount : 
+                String.format("Invariant violation: count=%d, success=%d, failure=%d", 
+                    totalCount, successCount, failureCount);
         }
         
         public float getAverageReward() {
             return totalCount > 0 ? totalReward / totalCount : 0.0f;
         }
         
+        /**
+         * ✅ GUARANTEED CORRECT: calculated from counts, never stored
+         */
         public float getSuccessRate() {
-            return totalCount > 0 ? (float) successCount / totalCount : 0.5f;
+            if (totalCount == 0) return 0.5f;  // Neutral prior
+            return (float) successCount / totalCount;
+        }
+        
+        public int getTotalCount() {
+            return totalCount;
+        }
+        
+        public int getSuccessCount() {
+            return successCount;
+        }
+        
+        public int getFailureCount() {
+            return failureCount;
+        }
+        
+        /**
+         * Validate internal consistency before submission
+         */
+        public boolean isValid() {
+            // Check invariant
+            if (totalCount != successCount + failureCount) {
+                LOGGER.error("TacticSubmission invariant violation for {}: {} - count={}, success={}, failure={}",
+                    mobType, action, totalCount, successCount, failureCount);
+                return false;
+            }
+            
+            // Check count is positive
+            if (totalCount <= 0) {
+                LOGGER.warn("TacticSubmission has no data for {}: {}", mobType, action);
+                return false;
+            }
+            
+            // Check for overflow
+            if (totalCount > 1_000_000) {
+                LOGGER.warn("TacticSubmission overflow for {}: {} - count={}", mobType, action, totalCount);
+                return false;
+            }
+            
+            return true;
+        }
+        
+        @Override
+        public String toString() {
+            return String.format("%s:%s (count=%d, success=%d, failure=%d, successRate=%.2f, avgReward=%.2f)",
+                mobType, action, totalCount, successCount, failureCount, getSuccessRate(), getAverageReward());
         }
     }
     
     /**
      * Global tactic learned by the collective AI across all servers
      * Available for cross-mob emergent learning
+     * ✅ ENHANCED: Now tracks momentum state for FedAvgM aggregation
      */
     public static class GlobalTactic {
         public final String originalMobType;  // Which mob type originally learned this
         public final String action;
         public final float avgReward;
         public final long timestamp;
+        public final float momentum;  // Velocity term for FedAvgM
+        public final float weightedAvgReward;  // Momentum-adjusted reward
         
         public GlobalTactic(String originalMobType, String action, float avgReward, long timestamp) {
+            this(originalMobType, action, avgReward, timestamp, 0.0f, avgReward);
+        }
+        
+        public GlobalTactic(String originalMobType, String action, float avgReward, long timestamp,
+                           float momentum, float weightedAvgReward) {
             this.originalMobType = originalMobType;
             this.action = action;
             this.avgReward = avgReward;
             this.timestamp = timestamp;
+            this.momentum = momentum;
+            this.weightedAvgReward = weightedAvgReward;
         }
         
         @Override
         public String toString() {
-            return String.format("%s's %s (reward: %.2f)", originalMobType, action, avgReward);
+            return String.format("%s's %s (reward: %.2f, weighted: %.2f, momentum: %.3f)", 
+                originalMobType, action, avgReward, weightedAvgReward, momentum);
         }
     }
     

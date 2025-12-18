@@ -1,0 +1,222 @@
+# =====================================================
+# MCA AI Enhanced - Configuration
+# Machine Learning Mob AI for Minecraft 1.20.1
+# =====================================================
+
+[general]
+	# === Core Settings ===
+	
+	#Safe Mode: Disable all ML/AI features entirely (emergency fallback)
+	#When true: Completely disables machine learning, federated learning, and advanced AI
+	#Use this if experiencing crashes or performance issues
+	#All mobs will use vanilla behavior only
+	safeMode = false
+	
+	#Enable AI-enhanced mob behavior
+	#When true: Mobs use machine learning to adapt tactics
+	#When false: Mobs use vanilla behavior
+	#NOTE: ML initialization auto-retries up to 5 times if DJL fails to load
+	#Retry schedule: 1 min, 2 min, 4 min, 8 min, 16 min (exponential backoff)
+	#This allows ML to recover from temporary issues (missing native libs, startup glitches)
+	enableMobAI = true
+	
+	#Enable AI-powered villager dialogue (requires MCA Reborn)
+	#When true: Villagers have AI-generated conversations
+	#When false: Villagers use default MCA dialogue
+	enableVillagerDialogue = true
+	
+	#Allow mobs to learn from combat outcomes
+	#When true: Mobs remember successful tactics and improve over time
+	#When false: Mobs use pre-trained AI without learning
+	enableLearning = true
+	
+	#Mob AI difficulty multiplier
+	#0.5 = Easy (slower reactions, basic tactics)
+	#1.0 = Normal (balanced AI)
+	#2.0 = Hard (aggressive tactics, quick reactions)
+	#3.0 = Expert (advanced coordination, perfect timing)
+	#Range: 0.5 ~ 3.0
+	aiDifficulty = 1.0
+
+[mob_behaviors]
+	# === Individual Mob AI Toggles ===
+	
+	#Enable adaptive behavior for Zombies
+	#Tactics: Circle strafing, group coordination, retreat when low health
+	enableZombieAI = true
+	
+	#Enable adaptive behavior for Skeletons
+	#Tactics: Kiting, cover usage, aim prediction
+	enableSkeletonAI = true
+	
+	#Enable adaptive behavior for Creepers
+	#Tactics: Flanking, hiding, explosion timing optimization
+	enableCreeperAI = true
+	
+	#Enable adaptive behavior for Spiders
+	#Tactics: Wall climbing ambush, pack hunting, cave advantage
+	enableSpiderAI = true
+	
+	#How often mobs update AI decisions (in ticks)
+	#Lower = More reactive but higher CPU usage
+	#Higher = Less reactive but better performance
+	#20 ticks = 1 second (recommended)
+	#Range: 10 ~ 100
+	aiUpdateInterval = 20
+
+[fallback]
+	# === Vanilla AI Enhancements (when ML disabled) ===
+	# These apply when enableMobAI=false or ML system fails to load
+	
+	#Increase mob pathfinding speed multiplier
+	#1.0 = vanilla speed, 1.5 = 50% faster pathfinding
+	#Range: 1.0 ~ 2.0
+	pathfindingSpeedMultiplier = 1.2
+	
+	#Increase mob detection range multiplier
+	#1.0 = vanilla range, 1.5 = 50% further detection
+	#Range: 1.0 ~ 2.0
+	detectionRangeMultiplier = 1.3
+	
+	#Reduce mob reaction time (in ticks)
+	#Lower = faster reactions
+	#20 = 1 second, 10 = 0.5 seconds
+	#Range: 5 ~ 40
+	reactionTimeTicks = 15
+
+[villager_dialogue]
+	# === Villager AI Dialogue Settings ===
+	#Number of dialogue variations to generate
+	#Range: 1 ~ 10
+	dialogueVariations = 3
+	
+	#Enable personality evolution over time
+	enablePersonalityLearning = true
+	
+	#Enable mood tracking for villagers
+	enableMoodSystem = true
+	
+	#Dialogue randomness (0.0 = predictable, 1.0 = very random)
+	#Range: 0.0 ~ 1.0
+	dialogueRandomness = 0.3
+
+[advanced]
+	#Path to custom AI models folder
+	modelsPath = "models"
+	
+	#Log AI decisions for debugging
+	debugAI = false
+	
+	#Enable experimental features
+	experimentalFeatures = false
+	
+	#REVOLUTIONARY: Enable cross-mob emergent learning
+	#Mobs can learn tactics from ANY species (e.g., zombies learning skeleton tactics)
+	#Creates unpredictable, emergent AI behavior never designed by developers
+	enableCrossMobLearning = true
+	
+	#Reward multiplier for successfully using borrowed tactics from other mob types
+	#Higher values = faster cross-species learning
+	#Range: 1.0 ~ 10.0
+	crossMobRewardMultiplier = 3.0
+	
+	#CONTEXTUAL AI DIFFICULTY: AI adapts to environment (Mob Control inspired)
+	#Mobs become HARDER at night, during storms, in Nether/End, near villages
+	#Creates dynamic gameplay where AI difficulty scales with risk/reward
+	enableContextualDifficulty = true
+
+[tier_progression]
+	# === HNN-Inspired AI Tier Progression ===
+	# Mobs gain experience from combat and progress through intelligence tiers
+	# UNTRAINED → LEARNING → TRAINED → EXPERT → MASTER
+	# Higher tiers = better tactics, faster thinking, fewer mistakes
+	
+	#Enable tier progression system (mobs get smarter over time)
+	#When true: Mobs level up intelligence through combat experience
+	#When false: All mobs use baseline difficulty
+	enableTierProgression = true
+	
+	#Enable visual tier indicators (colored particles)
+	#When true: Shows particle effects for TRAINED+ mobs
+	#When false: No visual indicators (cleaner look)
+	enableVisualTierIndicators = true
+	
+	#Experience rate multiplier (affects how fast mobs level up)
+	#1.0 = Normal progression (1000 exp for MASTER)
+	#2.0 = Fast progression (500 exp for MASTER)
+	#0.5 = Slow progression (2000 exp for MASTER)
+	#Range: 0.1 ~ 5.0
+	experienceRateMultiplier = 1.0
+	
+	#Sync tier data with federation (share experience globally)
+	#When true: Mobs learn from ALL servers' combat experience
+	#When false: Only local server experience counts
+	syncTiersWithFederation = true
+
+[tactic_tiers]
+	# === Tactic Tier System ===
+	# Mobs spawn with ELITE, VETERAN, or ROOKIE tiers for combat variety
+	# Tiers are based on global tactic win rates from Cloudflare
+	
+	#Enable tactic tier system (creates mob variety)
+	#When true: Mobs spawn with different difficulty tiers
+	#When false: All mobs use standard difficulty
+	enableTierSystem = true
+	
+	#Elite mob spawn chance (top 10% tactics, 2x difficulty)
+	#These are the deadliest mobs using only proven winning tactics
+	#Range: 0.0 ~ 1.0
+	eliteSpawnWeight = 0.10
+	
+	#Veteran mob spawn chance (middle 50% tactics, 1x difficulty)
+	#Balanced mobs using reliable, proven tactics
+	#Range: 0.0 ~ 1.0
+	veteranSpawnWeight = 0.50
+	
+	#Rookie mob spawn chance (bottom 40% tactics, 0.5x difficulty)
+	#Easier mobs using experimental or less effective tactics
+	#Range: 0.0 ~ 1.0
+	rookieSpawnWeight = 0.40
+	
+	#Elite tier difficulty multiplier (2.0 = twice as hard)
+	#Range: 1.0 ~ 5.0
+	eliteDifficultyMultiplier = 2.0
+	
+	#Veteran tier difficulty multiplier (1.0 = normal)
+	#Range: 0.5 ~ 3.0
+	veteranDifficultyMultiplier = 1.0
+	
+	#Rookie tier difficulty multiplier (0.5 = half as hard)
+	#Range: 0.1 ~ 1.0
+	rookieDifficultyMultiplier = 0.5
+
+[federated_learning]
+	#Enable federated learning (share AI knowledge across ALL servers globally)
+	#Works out-of-the-box - no setup required!
+	enableFederatedLearning = true
+	
+	#Cloudflare Worker API endpoint (PLUG AND PLAY - already configured!)
+	#Your mobs will automatically learn from thousands of players worldwide
+	cloudApiEndpoint = "https://mca-ai-tactics-api.mc-ai-datcol.workers.dev"
+	
+	#Cloud API key for authentication (leave empty - public endpoint)
+	cloudApiKey = ""
+	
+	#Minimum data points before contributing to global knowledge
+	#Range: 5 ~ 100
+	minDataPointsToContribute = 10
+	
+	#Auto-download tactics learned by other servers (recommended: true)
+	autoDownloadKnowledge = true
+	
+	#Auto-upload your tactics to help other servers (recommended: true)
+	autoUploadKnowledge = true
+	
+	#How often to sync with global knowledge base (minutes)
+	#Range: 5 ~ 60
+	syncIntervalMinutes = 5
+	
+	#LEGACY OPTIONS (deprecated - ignore these)
+	#Git repository URL - only used if cloudApiEndpoint is removed
+	federatedRepoUrl = "git@github.com:smokydastona/adaptive-ai-federation-logs.git"
+
