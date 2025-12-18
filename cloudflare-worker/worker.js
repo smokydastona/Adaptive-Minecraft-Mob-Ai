@@ -477,6 +477,14 @@ export default {
       const response = await coordinator.fetch(coordinatorReq);
       const status = await response.json();
 
+      // Also flush any pending GitHub round logs (internal-only).
+      try {
+        const flushReq = new Request('https://coordinator/coordinator/flush-github', { method: 'POST' });
+        await coordinator.fetch(flushReq);
+      } catch {
+        // Ignore
+      }
+
       if (env.GITHUB_TOKEN && env.GITHUB_REPO) {
         const logger = new GitHubLogger(env.GITHUB_TOKEN, env.GITHUB_REPO);
         await logger.logStatus({

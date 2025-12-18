@@ -24,6 +24,11 @@ export class FederationCoordinator {
     this.models = null;
     this.globalModel = null;
     this.lastAggregation = null;
+
+    // GitHub observability backlog (persisted)
+    // Ensures every completed round is eventually written to GitHub, even if GitHub has transient failures.
+    this.pendingRoundLogs = null;
+    this.lastGitHubLogError = null;
     
     // GitHub logger (observability only - never blocks federation)
     this.logger = null;
@@ -73,6 +78,19 @@ export class FederationCoordinator {
     
     if (path === '/coordinator/heartbeat' && request.method === 'POST') {
       return await this.handleHeartbeat(request);
+    }
+
+    // Internal-only: flush pending GitHub logs (invoked by Worker scheduled handler)
+    if (path === '/coordinator/flush-github' && request.method === 'POST') {
+      await this.flushPendingGitHubRoundLogs();
+      return new Response(JSON.stringify({
+        success: true,
+        pendingRoundLogs: this.pendingRoundLogs?.length || 0,
+        lastGitHubLogError: this.lastGitHubLogError || null
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // Admin routes (require bearer token)
@@ -187,6 +205,8 @@ export class FederationCoordinator {
       await this.state.storage.delete('lastAggregation');
       await this.state.storage.delete('tacticalData');
       await this.state.storage.delete('tierData');
+      await this.state.storage.delete('pendingRoundLogs');
+      await this.state.storage.delete('lastGitHubLogError');
     }
 
     // Reset in-memory state
@@ -213,15 +233,84 @@ export class FederationCoordinator {
     this.globalModel = await this.state.storage.get('globalModel') || null;
     this.lastAggregation = await this.state.storage.get('lastAggregation') || Date.now();
 
+    this.pendingRoundLogs = await this.state.storage.get('pendingRoundLogs') || [];
+    this.lastGitHubLogError = await this.state.storage.get('lastGitHubLogError') || null;
+
     // Initialize GitHub logger if token is available
     if (this.env.GITHUB_TOKEN && this.env.GITHUB_REPO) {
       this.logger = new GitHubLogger(this.env.GITHUB_TOKEN, this.env.GITHUB_REPO);
       console.log(`📝 GitHub logging enabled: ${this.env.GITHUB_REPO}`);
+
+      // Best-effort: flush any backlog without ever blocking federation.
+      this.flushPendingGitHubRoundLogs().catch(() => {});
     } else {
       console.log(`⚠️ GitHub logging disabled (no token/repo configured)`);
     }
 
     console.log(`🎯 Coordinator initialized: Round ${this.currentRound}, ${this.contributors.size} contributors`);
+  }
+
+  async persistGitHubLogState() {
+    await this.state.storage.put('pendingRoundLogs', this.pendingRoundLogs || []);
+    await this.state.storage.put('lastGitHubLogError', this.lastGitHubLogError || null);
+  }
+
+  async enqueueRoundLog(payload) {
+    if (!payload || typeof payload.round !== 'number') return;
+    if (!Array.isArray(this.pendingRoundLogs)) this.pendingRoundLogs = [];
+
+    const existingIdx = this.pendingRoundLogs.findIndex((x) => x && x.round === payload.round);
+    if (existingIdx >= 0) {
+      this.pendingRoundLogs[existingIdx] = payload;
+    } else {
+      this.pendingRoundLogs.push(payload);
+      // Bound backlog growth
+      if (this.pendingRoundLogs.length > 250) {
+        this.pendingRoundLogs = this.pendingRoundLogs.slice(this.pendingRoundLogs.length - 250);
+      }
+    }
+
+    await this.persistGitHubLogState();
+  }
+
+  async flushPendingGitHubRoundLogs() {
+    if (!this.logger) return;
+    if (!Array.isArray(this.pendingRoundLogs) || this.pendingRoundLogs.length === 0) return;
+
+    // Process in ascending round order
+    this.pendingRoundLogs.sort((a, b) => (a?.round ?? 0) - (b?.round ?? 0));
+
+    const stillPending = [];
+    for (const payload of this.pendingRoundLogs) {
+      if (!payload || typeof payload.round !== 'number') continue;
+
+      try {
+        await this.logger.logRound(payload);
+      } catch (e) {
+        const message = e?.message || String(e);
+        this.lastGitHubLogError = {
+          timestamp: new Date().toISOString(),
+          message
+        };
+        stillPending.push(payload);
+        // Stop early to avoid burning CPU/time if GitHub is down.
+        break;
+      }
+    }
+
+    // Carry over any not-attempted entries after the first failure
+    if (stillPending.length > 0) {
+      const firstPendingRound = stillPending[0]?.round;
+      for (const payload of this.pendingRoundLogs) {
+        if (!payload || typeof payload.round !== 'number') continue;
+        if (payload.round >= firstPendingRound && !stillPending.some((x) => x.round === payload.round)) {
+          stillPending.push(payload);
+        }
+      }
+    }
+
+    this.pendingRoundLogs = stillPending;
+    await this.persistGitHubLogState();
   }
 
   /**
@@ -431,8 +520,7 @@ export class FederationCoordinator {
         };
       }
 
-      // Single write per round (async, non-blocking)
-      this.logger.logRound({
+      const payload = {
         round: this.currentRound,
         timestamp: new Date(this.globalModel.timestamp).toISOString(),
         contributors: {
@@ -442,8 +530,12 @@ export class FederationCoordinator {
         mobTypes,
         modelStats,
         tactics: aggregated
-      }).catch(() => {
-        // Silent failure - already logged in GitHubLogger
+      };
+
+      // Persist locally first (Durable Object storage) so this round has a record even if GitHub is down.
+      await this.enqueueRoundLog(payload);
+      this.flushPendingGitHubRoundLogs().catch(() => {
+        // Silent failure - backlog will retry later
       });
     }
 
@@ -764,7 +856,12 @@ export class FederationCoordinator {
       modelsInCurrentRound: this.models.size,
       lastAggregation: new Date(this.lastAggregation).toISOString(),
       hasGlobalModel: this.globalModel !== null,
-      globalModelRound: this.globalModel?.round || null
+      globalModelRound: this.globalModel?.round || null,
+      github: {
+        enabled: !!this.logger,
+        pendingRoundLogs: Array.isArray(this.pendingRoundLogs) ? this.pendingRoundLogs.length : 0,
+        lastError: this.lastGitHubLogError || null
+      }
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
