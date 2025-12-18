@@ -2,6 +2,12 @@
 
 All notable changes to MCA AI Enhanced will be documented in this file.
 
+## [1.1.148] - 2025-12-18
+
+### Fixed
+- **Critical**: Silent startup crash in some launchers/modpacks caused by a missing Mixin refmap resource
+  - Removed the `refmap` reference from `adaptivemobai.mixins.json` so production startup no longer depends on a packaged refmap file
+
 ## [1.1.17] - 2025-12-15
 
 ### Added
