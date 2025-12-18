@@ -2,6 +2,12 @@
 
 All notable changes to MCA AI Enhanced will be documented in this file.
 
+## [1.1.150] - 2025-12-18
+
+### Fixed
+- **Critical**: Additional silent startup crash hardening during early Mixin bootstrap
+  - Removed direct `ModList` and `GANCityMod` references from `MobAIEnhancementMixin` so it can be loaded/verified safely before Forge is fully initialized (uses reflection at runtime instead)
+
 ## [1.1.148] - 2025-12-18
 
 ### Fixed
