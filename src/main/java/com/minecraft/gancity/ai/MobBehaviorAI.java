@@ -1073,9 +1073,12 @@ public class MobBehaviorAI {
             return "default_attack";
         }
 
-        // Retry ML initialization on first combat if initial attempt failed
-        if (mlEnabled && doubleDQN == null && !initializationAttempted) {
-            LOGGER.info("First combat detected - attempting deferred ML initialization...");
+        // FIX: Allow combat-triggered ML initialization retries (removed !initializationAttempted check)
+        // This ensures ML can initialize during combat even if startup initialization failed
+        // Add cooldown to prevent spam: only retry if 5+ seconds since last attempt
+        if (mlEnabled && doubleDQN == null && 
+            (System.currentTimeMillis() - lastInitAttemptTime) > 5000) {
+            LOGGER.info("Combat detected - attempting deferred ML initialization (retry #{})", initializationRetries + 1);
             initializeAdvancedMLSystems();
         }
 
