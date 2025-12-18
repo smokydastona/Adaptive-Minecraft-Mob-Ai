@@ -404,7 +404,8 @@ export class FederationCoordinator {
 
     // Initialize GitHub logger if token is available
     if (this.env.GITHUB_TOKEN && this.env.GITHUB_REPO) {
-      this.logger = new GitHubLogger(this.env.GITHUB_TOKEN, this.env.GITHUB_REPO);
+      const overwriteRounds = String(this.env.GITHUB_ROUND_OVERWRITE || '').toLowerCase() === 'true';
+      this.logger = new GitHubLogger(this.env.GITHUB_TOKEN, this.env.GITHUB_REPO, { overwriteRounds });
       console.log(`📝 GitHub logging enabled: ${this.env.GITHUB_REPO}`);
 
       // Best-effort: flush any backlog without ever blocking federation.

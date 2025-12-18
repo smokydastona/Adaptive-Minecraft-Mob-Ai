@@ -32,6 +32,7 @@ crons = ["0 * * * *"]  # Every hour at :00
 [vars]
 GITHUB_REPO = "smokydastona/adaptive-ai-federation-logs"
 GITHUB_BRANCH = "main"
+GITHUB_ROUND_OVERWRITE = "true"  # When true, round logs may overwrite existing rounds/round-*.json files
 
 # Secrets (set with: wrangler secret put GITHUB_TOKEN)
 # GITHUB_TOKEN = "your-github-personal-access-token"

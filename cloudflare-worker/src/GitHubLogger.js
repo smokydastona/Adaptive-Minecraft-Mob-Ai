@@ -21,10 +21,14 @@
  */
 
 export class GitHubLogger {
-  constructor(token, repo) {
+  constructor(token, repo, options = {}) {
     this.token = token;
     this.repo = repo; // Format: "owner/repo"
     this.baseUrl = `https://api.github.com/repos/${repo}/contents`;
+
+    this.options = {
+      overwriteRounds: options?.overwriteRounds === true
+    };
   }
 
   async fileExists(path) {
@@ -53,11 +57,13 @@ export class GitHubLogger {
     const filename = `rounds/round-${roundNumber}.json`;
 
     // Avoid rewriting round artifacts (keeps GitHub history clean and prevents spam).
-    // If the file already exists, treat this as success.
-    const exists = await this.fileExists(filename);
-    if (exists) {
-      console.log(`📝 GitHub: Round ${roundData.round} already logged (${filename}), skipping`);
-      return { skipped: true, filename };
+    // If overwrite is enabled, we intentionally allow writing over old rounds.
+    if (!this.options.overwriteRounds) {
+      const exists = await this.fileExists(filename);
+      if (exists) {
+        console.log(`📝 GitHub: Round ${roundData.round} already logged (${filename}), skipping`);
+        return { skipped: true, filename };
+      }
     }
 
     const tactics = roundData.tactics || {};
