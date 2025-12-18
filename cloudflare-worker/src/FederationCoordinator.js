@@ -93,9 +93,28 @@ export class FederationCoordinator {
       });
     }
 
+    // Internal-only: backfill the current global model round snapshot to GitHub.
+    // Useful if GitHub logging missed earlier rounds due to transient failures.
+    if (path === '/coordinator/backfill-current-global' && request.method === 'POST') {
+      await this.backfillCurrentGlobalModelRound();
+      return new Response(JSON.stringify({
+        success: true,
+        globalModelRound: this.globalModel?.round || null,
+        pendingRoundLogs: this.pendingRoundLogs?.length || 0,
+        lastGitHubLogError: this.lastGitHubLogError || null
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     // Admin routes (require bearer token)
     if (path === '/coordinator/admin/reset-round' && request.method === 'POST') {
       return await this.handleAdminResetRound(request);
+    }
+
+    if (path === '/coordinator/admin/backfill-current-global' && request.method === 'POST') {
+      return await this.handleAdminBackfillCurrentGlobal(request);
     }
     
     // Tier progression routes
@@ -190,6 +209,84 @@ export class FederationCoordinator {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
+  }
+
+  async handleAdminBackfillCurrentGlobal(request) {
+    if (!this.env.ADMIN_TOKEN) {
+      return new Response(JSON.stringify({
+        error: 'Admin backfill not configured',
+        message: 'Set ADMIN_TOKEN as a Cloudflare secret to enable admin operations'
+      }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const auth = request.headers.get('Authorization') || '';
+    const token = auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : '';
+    if (!token || token !== this.env.ADMIN_TOKEN) {
+      return new Response(JSON.stringify({
+        error: 'Unauthorized',
+        message: 'Missing or invalid Authorization bearer token'
+      }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    await this.backfillCurrentGlobalModelRound();
+
+    return new Response(JSON.stringify({
+      success: true,
+      globalModelRound: this.globalModel?.round || null,
+      pendingRoundLogs: this.pendingRoundLogs?.length || 0,
+      lastGitHubLogError: this.lastGitHubLogError || null
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  buildRoundPayloadFromGlobalModel() {
+    if (!this.globalModel) return null;
+
+    const aggregated = this.globalModel.tactics || {};
+
+    // Privacy-safe contributor stats (counts only)
+    const uniqueServers = new Set();
+    for (const key of this.contributors?.keys?.() || []) {
+      const serverIdPart = String(key).split(':')[0];
+      if (serverIdPart) uniqueServers.add(serverIdPart);
+    }
+
+    const mobTypes = Object.keys(aggregated);
+    const modelStats = {};
+    for (const [mobType, tactics] of Object.entries(aggregated)) {
+      modelStats[mobType] = {
+        distinctActionsObserved: Object.keys(tactics || {}).length,
+        totalExperiences: Object.values(tactics || {}).reduce((sum, t) => sum + (t?.count || 0), 0)
+      };
+    }
+
+    return {
+      round: this.globalModel.round,
+      timestamp: new Date(this.globalModel.timestamp || Date.now()).toISOString(),
+      contributors: {
+        servers: uniqueServers.size,
+        submissions: typeof this.globalModel.contributors === 'number' ? this.globalModel.contributors : undefined
+      },
+      mobTypes,
+      modelStats,
+      tactics: aggregated
+    };
+  }
+
+  async backfillCurrentGlobalModelRound() {
+    if (!this.logger) return;
+    const payload = this.buildRoundPayloadFromGlobalModel();
+    if (!payload) return;
+    await this.enqueueRoundLog(payload);
+    await this.flushPendingGitHubRoundLogs();
   }
 
   async resetFederationState(startRound) {

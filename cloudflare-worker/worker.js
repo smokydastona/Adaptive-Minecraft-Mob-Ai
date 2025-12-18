@@ -226,6 +226,55 @@ export default {
         }
       }
 
+      // Admin endpoint - backfill the current global model round snapshot to GitHub
+      if (url.pathname === '/admin/backfill-current-round' && request.method === 'POST') {
+        if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) {
+          return new Response(JSON.stringify({
+            error: 'GitHub not configured',
+            message: 'Set GITHUB_TOKEN secret and GITHUB_REPO var in wrangler.toml'
+          }), {
+            status: 503,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Require ADMIN_TOKEN
+        if (!env.ADMIN_TOKEN) {
+          return new Response(JSON.stringify({
+            error: 'Admin backfill not configured',
+            message: 'Set ADMIN_TOKEN as a Cloudflare secret to enable admin operations'
+          }), {
+            status: 503,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const auth = request.headers.get('Authorization') || '';
+        const token = auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : '';
+        if (!token || token !== env.ADMIN_TOKEN) {
+          return new Response(JSON.stringify({
+            error: 'Unauthorized',
+            message: 'Missing or invalid Authorization bearer token'
+          }), {
+            status: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const coordinatorReq = new Request('https://coordinator/coordinator/admin/backfill-current-global', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const response = await coordinator.fetch(coordinatorReq);
+        const result = await response.json();
+
+        return new Response(JSON.stringify(result), {
+          status: response.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
       // Admin endpoint - reset federation round/state
       // Requires ADMIN_TOKEN secret set in Cloudflare (Authorization: Bearer <token>)
       if (url.pathname === '/admin/reset-round' && request.method === 'POST') {
@@ -481,6 +530,14 @@ export default {
       try {
         const flushReq = new Request('https://coordinator/coordinator/flush-github', { method: 'POST' });
         await coordinator.fetch(flushReq);
+      } catch {
+        // Ignore
+      }
+
+      // Also backfill the current global model round snapshot if it was missed previously.
+      try {
+        const backfillReq = new Request('https://coordinator/coordinator/backfill-current-global', { method: 'POST' });
+        await coordinator.fetch(backfillReq);
       } catch {
         // Ignore
       }
