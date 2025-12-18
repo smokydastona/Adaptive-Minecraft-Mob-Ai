@@ -39,27 +39,44 @@ public class MobTierAssignmentHandler {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final Random RANDOM = new Random();
     
-    // Mod compatibility detection
-    private static final boolean ICE_AND_FIRE_LOADED = ModList.get().isLoaded("iceandfire");
-    private static final boolean PMMO_LOADED = ModList.get().isLoaded("pmmo");
-    private static final boolean LIVESTOCK_OVERHAUL_LOADED = ModList.get().isLoaded("livestock_overhaul");
-    private static final boolean PET_OVERHAUL_LOADED = ModList.get().isLoaded("petoverhaul");
+    // Mod compatibility detection - lazy loaded to avoid classloading deadlock during mixin discovery
+    private static Boolean iceAndFireLoaded = null;
+    private static Boolean pmmoLoaded = null;
+    private static Boolean livestockOverhaulLoaded = null;
+    private static Boolean petOverhaulLoaded = null;
+    
+    private static boolean isIceAndFireLoaded() {
+        if (iceAndFireLoaded == null) {
+            iceAndFireLoaded = ModList.get().isLoaded("iceandfire");
+        }
+        return iceAndFireLoaded;
+    }
+    
+    private static boolean isPmmoLoaded() {
+        if (pmmoLoaded == null) {
+            pmmoLoaded = ModList.get().isLoaded("pmmo");
+        }
+        return pmmoLoaded;
+    }
+    
+    private static boolean isLivestockOverhaulLoaded() {
+        if (livestockOverhaulLoaded == null) {
+            livestockOverhaulLoaded = ModList.get().isLoaded("livestock_overhaul");
+        }
+        return livestockOverhaulLoaded;
+    }
+    
+    private static boolean isPetOverhaulLoaded() {
+        if (petOverhaulLoaded == null) {
+            petOverhaulLoaded = ModList.get().isLoaded("petoverhaul");
+        }
+        return petOverhaulLoaded;
+    }
     
     private static final String TIER_TAG = "AdaptiveMobAI_Tier";
     private static final String TIER_ASSIGNED_TAG = "AdaptiveMobAI_TierAssigned";
     
-    // Log compatibility status on first access
-    static {
-        if (ICE_AND_FIRE_LOADED) {
-            LOGGER.info("[Tier System] Ice and Fire detected - skipping dragons and mythical creatures");
-        }
-        if (PMMO_LOADED) {
-            LOGGER.info("[Tier System] PMMO detected - reducing stat modifiers to avoid conflicts");
-        }
-        if (LIVESTOCK_OVERHAUL_LOADED || PET_OVERHAUL_LOADED) {
-            LOGGER.info("[Tier System] Animal overhaul mod detected - skipping non-hostile entities");
-        }
-    }
+    // Compatibility status logged on first use (lazy initialization prevents classloading deadlock)
     
     /**
      * Assign tactic tier when mob spawns
@@ -124,7 +141,7 @@ public class MobTierAssignmentHandler {
         }
         
         // Ice and Fire compatibility - skip dragons and mythical creatures
-        if (ICE_AND_FIRE_LOADED) {
+        if (isIceAndFireLoaded()) {
             String entityId = entity.getType().toString();
             // Skip Ice and Fire entities (they have complex custom AI)
             if (entityId.contains("iceandfire:")) {
@@ -151,7 +168,7 @@ public class MobTierAssignmentHandler {
         float weakHealthMultiplier = 0.8f;
         float weakSpeedMultiplier = 0.9f;
         
-        if (PMMO_LOADED) {
+        if (isPmmoLoaded()) {
             // Reduce modifiers by half when PMMO is present
             healthMultiplier = 1.1f;      // 20% -> 10%
             speedMultiplier = 1.05f;      // 10% -> 5%
