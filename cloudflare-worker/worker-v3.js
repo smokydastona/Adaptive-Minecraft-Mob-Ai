@@ -488,10 +488,27 @@ function buildDeterministicAnalysis({ status, global, tacticalWeights, tacticalS
       const successCount = typeof t?.successCount === 'number' ? t.successCount : 0;
       const successRate = typeof t?.successRate === 'number' ? t.successRate : (count > 0 ? (successCount / count) : 0);
       const avgReward = typeof t?.avgReward === 'number' ? t.avgReward : 0;
-      return { action, count, successCount, successRate, avgReward };
+
+      const wilsonLower95 = wilsonLowerBound(successCount, count, 1.96);
+
+      // Reliability-aware score (kept intentionally simple + deterministic)
+      // This is only for ranking/inspection; not used by federation itself.
+      const score = avgReward + (wilsonLower95 * 2);
+
+      return {
+        action,
+        count,
+        successCount,
+        successRate,
+        avgReward,
+        confidence: {
+          wilsonLower95
+        },
+        score: Number(score.toFixed(4))
+      };
     });
 
-    actions.sort((a, b) => (b.avgReward - a.avgReward) || (b.successRate - a.successRate) || (b.count - a.count));
+    actions.sort((a, b) => (b.score - a.score) || (b.avgReward - a.avgReward) || (b.successRate - a.successRate) || (b.count - a.count));
 
     const totalCount = actions.reduce((sum, a) => sum + a.count, 0);
     const entropy = totalCount > 0
@@ -502,6 +519,17 @@ function buildDeterministicAnalysis({ status, global, tacticalWeights, tacticalS
       : 0;
 
     const top = actions.slice(0, 10);
+    const recommended = actions
+      .filter(a => a.count >= 5)
+      .slice(0, 5)
+      .map(a => ({
+        action: a.action,
+        score: a.score,
+        avgReward: a.avgReward,
+        successRate: a.successRate,
+        attempts: a.count,
+        wilsonLower95: a.confidence.wilsonLower95
+      }));
     const weights = (tacticalWeights && tacticalWeights[m]) ? tacticalWeights[m] : {};
 
     analysisByMob[m] = {
@@ -509,6 +537,7 @@ function buildDeterministicAnalysis({ status, global, tacticalWeights, tacticalS
       totalExperiences: totalCount,
       policyEntropyBits: Number(entropy.toFixed(3)),
       topActions: top,
+      recommendedActions: recommended,
       tacticalWeightsTop: Object.entries(weights)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10)
@@ -571,6 +600,20 @@ function cosineSimilarity(vecA, vecB) {
 
   if (normA === 0 || normB === 0) return 0;
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+function wilsonLowerBound(successes, trials, z) {
+  const n = Number(trials || 0);
+  const s = Number(successes || 0);
+  if (n <= 0) return 0;
+
+  const phat = s / n;
+  const z2 = z * z;
+  const denom = 1 + (z2 / n);
+  const center = phat + (z2 / (2 * n));
+  const margin = z * Math.sqrt((phat * (1 - phat) / n) + (z2 / (4 * n * n)));
+  const lower = (center - margin) / denom;
+  return Number(Math.max(0, Math.min(1, lower)).toFixed(4));
 }
 
 function buildAIPrompt(deterministic) {

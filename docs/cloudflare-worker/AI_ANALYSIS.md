@@ -6,6 +6,8 @@ This repo includes an optional, **privacy-safe** analysis endpoint that performs
 
 - `GET /api/analyze-tactics`
 
+Note: This endpoint returns `404` until the coordinator has produced at least one global model (i.e., after the first successful aggregation).
+
 ### Query params
 
 - `mobType` (optional): analyze one mob type (e.g. `zombie`). If omitted, analyzes all.
