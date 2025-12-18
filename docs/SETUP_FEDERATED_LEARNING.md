@@ -43,7 +43,7 @@ wrangler login
 
 ## Step 5: Create Storage Space (1 minute)
 ```powershell
-cd "C:\Users\smoky\OneDrive\Desktop\2 lost cities\Minecraft-GAN-City-Generator\cloudflare-worker"
+  Set-Location "C:\Users\smoky\OneDrive\Desktop\2 lost cities\Minecraft-GAN-City-Generator\cloudflare-worker"
 wrangler kv:namespace create TACTICS_KV
 ```
 

@@ -29,6 +29,28 @@ export class FederationCoordinator {
     this.logger = null;
   }
 
+  getBrainConfig() {
+    const momentum = Number.parseFloat(this.env?.BRAIN_MOMENTUM ?? '0.25');
+    const priorA = Number.parseFloat(this.env?.BRAIN_PRIOR_A ?? '2');
+    const priorB = Number.parseFloat(this.env?.BRAIN_PRIOR_B ?? '2');
+    const iqrK = Number.parseFloat(this.env?.BRAIN_OUTLIER_IQR_K ?? '2.5');
+    const weightBlend = Number.parseFloat(this.env?.BRAIN_WEIGHT_BLEND ?? '0.35');
+    const weightLearningRate = Number.parseFloat(this.env?.BRAIN_WEIGHT_LR ?? '0.08');
+    const softmaxTemp = Number.parseFloat(this.env?.BRAIN_SOFTMAX_TEMP ?? '0.85');
+    const maxActions = Number.parseInt(this.env?.BRAIN_MAX_ACTIONS ?? '64', 10);
+
+    return {
+      momentum: Number.isFinite(momentum) ? Math.min(0.95, Math.max(0, momentum)) : 0.25,
+      priorA: Number.isFinite(priorA) ? Math.min(25, Math.max(0, priorA)) : 2,
+      priorB: Number.isFinite(priorB) ? Math.min(25, Math.max(0, priorB)) : 2,
+      iqrK: Number.isFinite(iqrK) ? Math.min(10, Math.max(0, iqrK)) : 2.5,
+      weightBlend: Number.isFinite(weightBlend) ? Math.min(1, Math.max(0, weightBlend)) : 0.35,
+      weightLearningRate: Number.isFinite(weightLearningRate) ? Math.min(0.5, Math.max(0.001, weightLearningRate)) : 0.08,
+      softmaxTemp: Number.isFinite(softmaxTemp) ? Math.min(3, Math.max(0.05, softmaxTemp)) : 0.85,
+      maxActions: Number.isFinite(maxActions) ? Math.min(256, Math.max(8, maxActions)) : 64
+    };
+  }
+
   async fetch(request) {
     // Initialize state on first access
     await this.initialize();
@@ -340,10 +362,13 @@ export class FederationCoordinator {
       modelsByMob.get(mobType).push(modelData.tactics);
     }
 
+    const brain = this.getBrainConfig();
+
     // Aggregate each mob type separately
     const aggregated = {};
     for (const [mobType, tacticsList] of modelsByMob.entries()) {
-      aggregated[mobType] = this.fedAvg(tacticsList);
+      const previous = this.globalModel?.tactics?.[mobType] || null;
+      aggregated[mobType] = this.aggregateMobTactics(tacticsList, previous, brain);
     }
 
     // Store as new global model
@@ -355,6 +380,10 @@ export class FederationCoordinator {
     };
 
     this.lastAggregation = Date.now();
+
+    // Update tactical weights using the newly aggregated global model.
+    // This reduces client-side compute: clients can pull /api/tactical-weights and use them directly.
+    await this.updateTacticalWeightsFromGlobalModel(aggregated, brain);
 
     // Persist to GitHub via KV
     await this.publishGlobalModel();
@@ -405,47 +434,233 @@ export class FederationCoordinator {
     console.log(`✅ Aggregation complete. Now on Round ${this.currentRound}`);
   }
 
-  /**
-   * Federated Averaging (FedAvg) algorithm
-   * Average the rewards, counts, and success rates across all contributors
-   */
-  fedAvg(tacticsList) {
+  safeNumber(value, fallback = 0) {
+    const n = typeof value === 'number' ? value : Number.parseFloat(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  clamp01(x) {
+    if (!Number.isFinite(x)) return 0;
+    return Math.min(1, Math.max(0, x));
+  }
+
+  percentile(sortedValues, p) {
+    if (!sortedValues.length) return 0;
+    const idx = (sortedValues.length - 1) * p;
+    const lower = Math.floor(idx);
+    const upper = Math.ceil(idx);
+    if (lower === upper) return sortedValues[lower];
+    const weight = idx - lower;
+    return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
+  }
+
+  getIqrFence(values, k) {
+    if (values.length < 4) {
+      return { low: -Infinity, high: Infinity };
+    }
+    const sorted = values.slice().sort((a, b) => a - b);
+    const q1 = this.percentile(sorted, 0.25);
+    const q3 = this.percentile(sorted, 0.75);
+    const iqr = q3 - q1;
+    if (!Number.isFinite(iqr) || iqr === 0) {
+      return { low: -Infinity, high: Infinity };
+    }
+    return { low: q1 - k * iqr, high: q3 + k * iqr };
+  }
+
+  blend(prev, next, momentum) {
+    if (!Number.isFinite(next)) return prev;
+    if (!Number.isFinite(prev)) return next;
+    return prev * momentum + next * (1 - momentum);
+  }
+
+  // Robust, privacy-safe aggregation with:
+  // - outlier trimming (IQR)
+  // - Bayesian-smoothed success rate
+  // - momentum blending with previous global model
+  aggregateMobTactics(tacticsList, previousMobTactics, brain) {
     const aggregated = {};
 
-    // Collect all unique actions
     const allActions = new Set();
     for (const tactics of tacticsList) {
+      if (!tactics || typeof tactics !== 'object') continue;
       for (const action in tactics) {
         allActions.add(action);
       }
     }
 
-    // For each action, compute weighted average
-    for (const action of allActions) {
-      let totalReward = 0;
+    // Avoid unbounded memory/CPU if a client spams actions.
+    const actions = Array.from(allActions).slice(0, brain.maxActions);
+
+    for (const action of actions) {
+      const observations = [];
+
+      for (const tactics of tacticsList) {
+        const t = tactics?.[action];
+        if (!t || typeof t !== 'object') continue;
+
+        const count = Math.max(0, Math.floor(this.safeNumber(t.count, 0)));
+        if (count <= 0) continue;
+
+        const avgReward = this.safeNumber(t.avgReward, 0);
+        const successCount = Math.max(0, Math.floor(this.safeNumber(t.successCount, 0)));
+        const failureCount = Math.max(0, Math.floor(this.safeNumber(t.failureCount, 0)));
+        const totalCount = Math.max(count, successCount + failureCount, 1);
+        const successRateRaw = this.clamp01(this.safeNumber(t.successRate, successCount / totalCount));
+
+        // Weight is sqrt(count) to reduce dominance from a single server.
+        const weight = Math.max(1, Math.sqrt(totalCount));
+
+        observations.push({
+          count: totalCount,
+          avgReward,
+          successCount,
+          successRateRaw,
+          weight
+        });
+      }
+
+      if (!observations.length) continue;
+
+      const rewardFence = this.getIqrFence(observations.map(o => o.avgReward), brain.iqrK);
+      const successFence = this.getIqrFence(observations.map(o => o.successRateRaw), brain.iqrK);
+
+      const filtered = observations.filter(o =>
+        o.avgReward >= rewardFence.low && o.avgReward <= rewardFence.high &&
+        o.successRateRaw >= successFence.low && o.successRateRaw <= successFence.high
+      );
+
+      // If trimming removed everything (degenerate), fall back to raw.
+      const used = filtered.length ? filtered : observations;
+
+      let weightedRewardSum = 0;
+      let weightSum = 0;
       let totalCount = 0;
       let totalSuccesses = 0;
 
-      for (const tactics of tacticsList) {
-        if (tactics[action]) {
-          const t = tactics[action];
-          totalReward += (t.avgReward || 0) * (t.count || 0);
-          totalCount += t.count || 0;
-          totalSuccesses += t.successCount || 0;
-        }
+      for (const o of used) {
+        weightedRewardSum += o.avgReward * o.weight;
+        weightSum += o.weight;
+        totalCount += o.count;
+        totalSuccesses += o.successCount;
       }
 
-      if (totalCount > 0) {
-        aggregated[action] = {
-          avgReward: totalReward / totalCount,
-          count: totalCount,
-          successCount: totalSuccesses,
-          successRate: totalSuccesses / totalCount
-        };
-      }
+      const avgReward = weightSum > 0 ? weightedRewardSum / weightSum : 0;
+      const smoothedSuccessRate = (totalSuccesses + brain.priorA) / (totalCount + brain.priorA + brain.priorB);
+
+      const prev = previousMobTactics?.[action];
+      const prevAvgReward = prev ? this.safeNumber(prev.avgReward, avgReward) : avgReward;
+      const prevSuccessRate = prev ? this.safeNumber(prev.successRate, smoothedSuccessRate) : smoothedSuccessRate;
+
+      const blendedReward = this.blend(prevAvgReward, avgReward, brain.momentum);
+      const blendedSuccessRate = this.clamp01(this.blend(prevSuccessRate, smoothedSuccessRate, brain.momentum));
+
+      aggregated[action] = {
+        avgReward: blendedReward,
+        count: totalCount,
+        successCount: totalSuccesses,
+        successRate: blendedSuccessRate
+      };
     }
 
     return aggregated;
+  }
+
+  softmax(scores, temperature) {
+    const temp = Math.max(0.01, temperature);
+    const values = Object.values(scores);
+    if (!values.length) return {};
+
+    // Normalize with max trick to avoid overflow.
+    const maxScore = Math.max(...values);
+    const expScores = {};
+    let sum = 0;
+    for (const [k, v] of Object.entries(scores)) {
+      const z = (v - maxScore) / temp;
+      // Clamp exponent input for safety.
+      const e = Math.exp(Math.max(-50, Math.min(50, z)));
+      expScores[k] = e;
+      sum += e;
+    }
+    if (sum <= 0) return {};
+    const out = {};
+    for (const [k, e] of Object.entries(expScores)) {
+      out[k] = e / sum;
+    }
+    return out;
+  }
+
+  // Derive a stable, globally useful weight distribution from aggregated tactics.
+  // This is designed to be cheap for clients: they just download weights.
+  deriveWeightsFromAggregatedTactics(mobTactics) {
+    const scores = {};
+    if (!mobTactics || typeof mobTactics !== 'object') return { scores, weights: {} };
+
+    for (const [action, t] of Object.entries(mobTactics)) {
+      if (!t || typeof t !== 'object') continue;
+
+      const avgReward = this.safeNumber(t.avgReward, 0);
+      const successRate = this.clamp01(this.safeNumber(t.successRate, 0.5));
+      const count = Math.max(0, Math.floor(this.safeNumber(t.count, 0)));
+
+      // Score heuristic:
+      // - successRate centered at 0.5
+      // - avgReward contributes but is squashed
+      // - count adds confidence via log
+      const rewardSquash = Math.tanh(avgReward / 8);
+      const successCentered = (successRate - 0.5) * 2; // [-1, +1]
+      const confidence = Math.log1p(count);
+      const score = (0.55 * successCentered + 0.45 * rewardSquash) * confidence;
+      scores[action] = score;
+    }
+
+    return { scores, weights: {} };
+  }
+
+  async updateTacticalWeightsFromGlobalModel(aggregatedByMob, brain) {
+    try {
+      const tacticalData = (await this.state.storage.get('tacticalData')) || {
+        episodes: [],
+        weights: {},
+        stats: { totalEpisodes: 0, totalSamples: 0 }
+      };
+
+      const weights = tacticalData.weights || {};
+
+      for (const [mobType, mobTactics] of Object.entries(aggregatedByMob || {})) {
+        const derived = this.deriveWeightsFromAggregatedTactics(mobTactics);
+        const soft = this.softmax(derived.scores, brain.softmaxTemp);
+
+        if (!weights[mobType]) weights[mobType] = {};
+
+        // Blend:
+        // - existing weights may come from episode EMA (recent, local-ish)
+        // - derived weights come from aggregated global tactics (stable)
+        // Final weight becomes a smoothed mix so clients can rely on it.
+        for (const [action, derivedWeight] of Object.entries(soft)) {
+          const current = this.safeNumber(weights[mobType][action], 0);
+          const mixed = current * (1 - brain.weightBlend) + derivedWeight * brain.weightBlend;
+          weights[mobType][action] = this.blend(current, mixed, 1 - brain.weightLearningRate);
+        }
+
+        // Keep weights bounded and deterministic.
+        for (const action of Object.keys(weights[mobType])) {
+          const w = this.safeNumber(weights[mobType][action], 0);
+          if (!Number.isFinite(w)) {
+            delete weights[mobType][action];
+            continue;
+          }
+          // Allow negative weights (episode learning uses negatives), but cap extremes.
+          weights[mobType][action] = Math.max(-1, Math.min(1, w));
+        }
+      }
+
+      tacticalData.weights = weights;
+      await this.state.storage.put('tacticalData', tacticalData);
+    } catch (error) {
+      // Never fail federation if weights update fails.
+      console.error('Tactical weight update failed (non-critical):', error?.message || error);
+    }
   }
 
   /**
