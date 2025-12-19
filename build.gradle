@@ -3,6 +3,7 @@ plugins {
     id 'idea'
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+    id 'org.spongepowered.mixin' version '0.7-SNAPSHOT'
 }
 
 // Version is sourced from gradle.properties (do not mutate files at build time)
@@ -70,6 +71,9 @@ repositories {
     maven {
         url "https://maven.neoforged.net/releases/"
     }
+    maven {
+        url 'https://repo.spongepowered.org/repository/maven-public/'
+    }
     mavenCentral()
     flatDir {
         dirs 'libs'
@@ -83,6 +87,9 @@ configurations {
 
 dependencies {
     minecraft 'net.minecraftforge:forge:1.20.1-47.4.0'
+
+    // Generates adaptivemobai.refmap.json at compile time
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 
     // MCA Reborn from libs folder (optional)
     // Download from: https://www.curseforge.com/minecraft/mc-mods/minecraft-comes-alive-reborn/files
@@ -105,6 +112,11 @@ dependencies {
     
     // DJL will auto-download PyTorch native libraries (~200MB) on first model load
     // These are cached in user's home directory and reused across runs
+}
+
+mixin {
+    add sourceSets.main, 'adaptivemobai.refmap.json'
+    config 'adaptivemobai.mixins.json'
 }
 
 // Configure the regular jar task with the new name

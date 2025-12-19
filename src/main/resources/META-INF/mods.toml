@@ -36,3 +36,6 @@ Powered by Deep Java Library (DJL) for AI inference.
     versionRange="[7.5.5,)"
     ordering="AFTER"
     side="SERVER"
+
+[[mixins]]
+config="adaptivemobai.mixins.json"
