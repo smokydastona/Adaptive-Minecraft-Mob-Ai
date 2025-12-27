@@ -90,13 +90,12 @@ public abstract class MobAIEnhancementMixin {
     @Inject(method = "registerGoals", at = @At("TAIL"))
     private void onRegisterGoals(CallbackInfo ci) {
         try {
-            // SAFE MODE CHECK: Skip AI if safe mode enabled or initialization failed
-            Object behaviorAI = tryGetMobBehaviorAI();
-            if (behaviorAI == null) {
-                return;  // Safe mode or initialization failure - use vanilla AI
-            }
-            
             Mob mob = (Mob)(Object)this;
+
+            // NOTE: Some features (like universal ranged-weapon usage) should work even if
+            // MobBehaviorAI/ML is disabled or failed to initialize. Only the ML-driven melee
+            // enhancements are gated behind behaviorAI != null.
+            Object behaviorAI = tryGetMobBehaviorAI();
             
             // Ice and Fire compatibility - skip their mobs entirely
             if (isIceAndFireLoaded()) {
@@ -116,7 +115,9 @@ public abstract class MobAIEnhancementMixin {
                 // MCA villagers get unique combat AI (for guards, self-defense)
                 // Lower priority (6) to not override MCA's core behavior
                 // enableEnvironmental = false (no block breaking/pillaring)
-                mob.goalSelector.addGoal(6, new AIEnhancedMeleeGoal(mob, 1.0, false, false, true));
+                if (behaviorAI != null) {
+                    mob.goalSelector.addGoal(6, new AIEnhancedMeleeGoal(mob, 1.0, false, false, true));
+                }
                 return;
             }
             
@@ -124,7 +125,9 @@ public abstract class MobAIEnhancementMixin {
                 // Vanilla villagers ALSO get persistent profiles! (works without MCA)
                 // Priority 7 to not override vanilla profession behavior
                 // enableEnvironmental = false (villagers don't break blocks)
-                mob.goalSelector.addGoal(7, new AIEnhancedMeleeGoal(mob, 1.0, false, false, true));
+                if (behaviorAI != null) {
+                    mob.goalSelector.addGoal(7, new AIEnhancedMeleeGoal(mob, 1.0, false, false, true));
+                }
                 return;
             }
             
@@ -139,10 +142,14 @@ public abstract class MobAIEnhancementMixin {
                 }
 
                 // Hostile mobs get aggressive AI with environmental tactics
-                mob.goalSelector.addGoal(2, new AIEnhancedMeleeGoal(mob, 1.0, true, true, false));
+                if (behaviorAI != null) {
+                    mob.goalSelector.addGoal(2, new AIEnhancedMeleeGoal(mob, 1.0, true, true, false));
+                }
             } else {
                 // Neutral and passive mobs get survival/evasion AI (lower priority to not override core behavior)
-                mob.goalSelector.addGoal(5, new AIEnhancedMeleeGoal(mob, 1.2, false, true, false));
+                if (behaviorAI != null) {
+                    mob.goalSelector.addGoal(5, new AIEnhancedMeleeGoal(mob, 1.2, false, true, false));
+                }
             }
         } catch (Throwable t) {
             // CRITICAL: Catch all errors to prevent mixin from breaking Forge init
