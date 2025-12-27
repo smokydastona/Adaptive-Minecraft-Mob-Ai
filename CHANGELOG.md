@@ -2,6 +2,12 @@
 
 All notable changes to Adaptive Mob AI will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- Hostile mobs holding bows/crossbows/tridents (including zombies) now reliably use them as ranged weapons instead of defaulting to melee
+  - Implemented as a Forge-side goal injection on `EntityJoinLevelEvent`, so it no longer depends on Mixin goal injection order or ML initialization state
+
 ## [1.1.181]
 
 ### Changed
