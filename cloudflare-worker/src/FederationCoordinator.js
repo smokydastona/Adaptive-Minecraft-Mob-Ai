@@ -838,11 +838,16 @@ export class FederationCoordinator {
       const blendedReward = this.blend(prevAvgReward, avgReward, brain.momentum);
       const blendedSuccessRate = this.clamp01(this.blend(prevSuccessRate, smoothedSuccessRate, brain.momentum));
 
+      const rawSuccessRate = totalCount > 0 ? (totalSuccesses / totalCount) : 0.5;
+
       aggregated[action] = {
         avgReward: blendedReward,
         count: totalCount,
         successCount: totalSuccesses,
-        successRate: blendedSuccessRate
+        // Backward compatible: successRate is smoothed/blended.
+        successRate: blendedSuccessRate,
+        // New: raw success rate derived from counts (always consistent).
+        rawSuccessRate: this.clamp01(rawSuccessRate)
       };
     }
 

@@ -203,6 +203,49 @@ public class CloudflareAPIClient {
             return false;
         }
     }
+
+    /**
+     * Submit a full tactics model for a single mobType in one upload.
+     * This is required because the worker allows only one upload per (serverId,mobType) per round.
+     * If we upload one action at a time, the action space collapses to 1.
+     */
+    public boolean submitTacticsModel(String mobType, JsonObject tactics, boolean bootstrap) {
+        try {
+            if (mobType == null || mobType.isEmpty()) {
+                LOGGER.error("Cannot submit tactics model with null/empty mobType");
+                return false;
+            }
+            if (tactics == null || tactics.size() == 0) {
+                LOGGER.warn("Skipping tactics model upload for {} (empty tactics)", mobType);
+                return false;
+            }
+
+            JsonObject payload = new JsonObject();
+            payload.addProperty("mobType", mobType);
+            payload.addProperty("serverId", serverId);
+            payload.addProperty("aggregationMethod", "FedAvgM");
+            payload.add("tactics", tactics);
+            payload.addProperty("timestamp", System.currentTimeMillis());
+            payload.addProperty("version", 1);
+            if (bootstrap) {
+                payload.addProperty("bootstrap", true);
+            }
+
+            String response = sendPostRequest("api/upload", gson.toJson(payload));
+            if (response != null) {
+                totalSubmissions++;
+                lastSuccessfulSync = System.currentTimeMillis();
+                return true;
+            }
+
+            failedSubmissions++;
+            return false;
+        } catch (Exception e) {
+            failedSubmissions++;
+            LOGGER.warn("Failed to submit tactics model for {}: {}", mobType, e.getMessage());
+            return false;
+        }
+    }
     
     /**
      * Upload replay buffer samples to Cloudflare Worker for global pooling

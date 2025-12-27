@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to MCA AI Enhanced will be documented in this file.
+All notable changes to Adaptive Mob AI will be documented in this file.
 
 ## [1.1.174] - 2025-12-18
 

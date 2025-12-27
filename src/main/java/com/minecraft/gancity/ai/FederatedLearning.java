@@ -3,6 +3,7 @@ package com.minecraft.gancity.ai;
 import com.mojang.logging.LogUtils;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import org.slf4j.Logger;
+import com.google.gson.JsonObject;
 
 import java.nio.file.*;
 import java.util.*;
@@ -32,7 +33,9 @@ public class FederatedLearning {
     // Sync Configuration
     private static final long SYNC_INTERVAL_MS = 300_000; // 5 minutes (submit)
     private static final long PULL_INTERVAL_MS = 600_000; // 10 minutes (download)
-    private static final int MIN_DATA_POINTS = 10; // Minimum data before submitting
+    // Minimum data before submitting.
+    // Too high causes perpetual "heartbeat-only" federation on low-activity servers.
+    private static final int MIN_DATA_POINTS = 3;
     
     // Memory Management
     private static final int MAX_TACTICS_PER_MOB = 50; // Keep top 50 tactics per mob type
@@ -193,37 +196,58 @@ public class FederatedLearning {
         CompletableFuture.runAsync(() -> {
             try {
                 LOGGER.info("Submitting {} local tactics to global repository...", submissionCount);
-                
-                int successCount = 0;
-                int failCount = 0;
-                
-                // Submit each pending tactic (happens on background thread)
+
+                // Group by mobType so we upload ONE model per mobType.
+                // The coordinator enforces one upload per (serverId,mobType) per round.
+                final Map<String, java.util.List<TacticSubmission>> byMob = new java.util.HashMap<>();
                 for (TacticSubmission submission : submissionsToUpload.values()) {
-                    boolean success = apiClient.submitTactic(
-                        submission.mobType,
-                        submission.action,
-                        submission.getAverageReward(),
-                        submission.getSuccessRate() > 0.5f ? "success" : "failure",
-                        submission.getSuccessRate()  // Pass win rate for tier calculation
-                    );
-                    
-                    if (success) {
-                        successCount++;
-                } else {
-                    failCount++;
+                    byMob.computeIfAbsent(submission.mobType, k -> new java.util.ArrayList<>()).add(submission);
                 }
-            }
-            
-            if (successCount > 0) {
-                LOGGER.info("Successfully submitted {} tactics ({} failed)", successCount, failCount);
-                lastSyncTime = currentTime;
-                
-                // Clear submitted tactics
-                pendingSubmissions.clear();
-                totalDataPointsContributed = 0;
-            } else {
-                LOGGER.warn("Failed to submit any tactics to API");
-            }
+
+                int mobUploadsOk = 0;
+                int mobUploadsFail = 0;
+
+                for (Map.Entry<String, java.util.List<TacticSubmission>> mobEntry : byMob.entrySet()) {
+                    String mobType = mobEntry.getKey();
+                    java.util.List<TacticSubmission> submissions = mobEntry.getValue();
+
+                    JsonObject tactics = new JsonObject();
+                    for (TacticSubmission submission : submissions) {
+                        if (submission == null || !submission.isValid()) continue;
+
+                        JsonObject tacticData = new JsonObject();
+                        tacticData.addProperty("avgReward", submission.getAverageReward());
+                        tacticData.addProperty("totalReward", submission.getTotalReward());
+                        tacticData.addProperty("count", submission.getTotalCount());
+                        tacticData.addProperty("successCount", submission.getSuccessCount());
+                        tacticData.addProperty("failureCount", submission.getFailureCount());
+                        tacticData.addProperty("successRate", submission.getSuccessRate());
+                        tacticData.addProperty("weightedAvgReward", submission.getAverageReward());
+                        tacticData.addProperty("momentum", 0.0);
+                        tacticData.addProperty("lastUpdate", System.currentTimeMillis());
+                        tactics.add(submission.action, tacticData);
+                    }
+
+                    if (tactics.size() == 0) continue;
+
+                    boolean ok = apiClient.submitTacticsModel(mobType, tactics, false);
+                    if (ok) {
+                        mobUploadsOk++;
+                    } else {
+                        mobUploadsFail++;
+                    }
+                }
+
+                if (mobUploadsOk > 0) {
+                    LOGGER.info("Successfully submitted {} mob models ({} failed)", mobUploadsOk, mobUploadsFail);
+                    lastSyncTime = currentTime;
+
+                    // Clear submitted tactics
+                    pendingSubmissions.clear();
+                    totalDataPointsContributed = 0;
+                } else {
+                    LOGGER.warn("Failed to submit any mob models to API ({} attempted)", byMob.size());
+                }
             
         } catch (Exception e) {
             LOGGER.error("Error submitting tactics (non-critical): {}", e.getMessage());
@@ -281,25 +305,39 @@ public class FederatedLearning {
                 // If we have pending submissions, upload those
                 if (!pendingSubmissions.isEmpty()) {
                     LOGGER.info("📤 Uploading {} pending tactics", pendingSubmissions.size());
+                    // Use the same batch model upload used by scheduled submissions.
+                    // This avoids collapsing the action space to 1 per mobType per round.
+                    final Map<String, java.util.List<TacticSubmission>> byMob = new java.util.HashMap<>();
                     for (TacticSubmission submission : pendingSubmissions.values()) {
-                        apiClient.submitTactic(
-                            submission.mobType,
-                            submission.action,
-                            submission.getAverageReward(),
-                            submission.getSuccessRate() > 0.5f ? "success" : "failure",
-                            submission.getSuccessRate()
-                        );
+                        byMob.computeIfAbsent(submission.mobType, k -> new java.util.ArrayList<>()).add(submission);
+                    }
+                    for (Map.Entry<String, java.util.List<TacticSubmission>> mobEntry : byMob.entrySet()) {
+                        String mobType = mobEntry.getKey();
+                        JsonObject tactics = new JsonObject();
+                        for (TacticSubmission submission : mobEntry.getValue()) {
+                            if (submission == null || !submission.isValid()) continue;
+                            JsonObject tacticData = new JsonObject();
+                            tacticData.addProperty("avgReward", submission.getAverageReward());
+                            tacticData.addProperty("totalReward", submission.getTotalReward());
+                            tacticData.addProperty("count", submission.getTotalCount());
+                            tacticData.addProperty("successCount", submission.getSuccessCount());
+                            tacticData.addProperty("failureCount", submission.getFailureCount());
+                            tacticData.addProperty("successRate", submission.getSuccessRate());
+                            tacticData.addProperty("weightedAvgReward", submission.getAverageReward());
+                            tacticData.addProperty("momentum", 0.0);
+                            tacticData.addProperty("lastUpdate", System.currentTimeMillis());
+                            tactics.add(submission.action, tacticData);
+                        }
+                        if (tactics.size() > 0) {
+                            apiClient.submitTacticsModel(mobType, tactics, false);
+                        }
                     }
                     pendingSubmissions.clear();
                 } else {
-                    // Seed federation after a reset.
-                    // The Worker aggregates after it has >= 3 models in the current round.
-                    // On a single server, the fastest way to kickstart a fresh round is to
-                    // submit 3 bootstrap uploads across distinct mob types.
-                    LOGGER.info("📡 Seeding bootstrap uploads to establish federation state");
-                    apiClient.submitTactic("zombie", "heartbeat_init", 0.5f, "success", 0.5f, true);
-                    apiClient.submitTactic("skeleton", "heartbeat_init", 0.5f, "success", 0.5f, true);
-                    apiClient.submitTactic("creeper", "heartbeat_init", 0.5f, "success", 0.5f, true);
+                    // Do NOT seed synthetic tactics.
+                    // Heartbeat is sufficient for connectivity; synthetic actions freeze observability.
+                    LOGGER.info("📡 No pending tactics to upload (skipping synthetic seeding)");
+                    apiClient.sendHeartbeat(new java.util.ArrayList<>(firstEncounters));
                 }
                 
                 lastSyncTime = System.currentTimeMillis();
@@ -925,6 +963,10 @@ public class FederatedLearning {
         
         public float getAverageReward() {
             return totalCount > 0 ? totalReward / totalCount : 0.0f;
+        }
+
+        public float getTotalReward() {
+            return totalReward;
         }
         
         /**

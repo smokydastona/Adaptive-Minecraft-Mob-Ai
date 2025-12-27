@@ -173,7 +173,33 @@ public class MobBehaviorAI {
 
     public MobBehaviorAI() {
         initializeDefaultProfiles();
+        // Non-DJL systems must be available even if DJL fails to load.
+        // This ensures federation/telemetry can still collect real outcomes.
+        initializeNonDjlSystems();
         // Don't initialize ML systems at startup - lazy load when needed
+    }
+
+    /**
+     * Initialize systems that do not depend on DJL/native ML.
+     * These should always be available so the mod can still learn/telemetry
+     * even when DJL is missing or fails to load on a server.
+     */
+    private void initializeNonDjlSystems() {
+        try {
+            if (tacticKnowledgeBase == null) {
+                tacticKnowledgeBase = new TacticKnowledgeBase();
+            }
+            if (modelPersistence == null) {
+                modelPersistence = new ModelPersistence();
+            }
+            if (tacticalAggregator == null) {
+                tacticalAggregator = new TacticalWeightAggregator();
+                HeuristicTacticSeeding.seedWithDifficulty(tacticalAggregator, difficultyMultiplier);
+            }
+        } catch (Throwable t) {
+            // Never hard-fail construction; AI will degrade gracefully.
+            LOGGER.warn("Non-DJL initialization failed (continuing with reduced features): {}", t.getMessage());
+        }
     }
     
     /**
@@ -291,6 +317,9 @@ public class MobBehaviorAI {
         }
         
         try {
+            // Ensure non-DJL components are always present.
+            initializeNonDjlSystems();
+
             // CRITICAL: Check if DJL is available (must catch Throwable for native lib failures)
             Class.forName("ai.djl.nn.Block");
             Class.forName("ai.djl.Model");
@@ -1562,12 +1591,29 @@ public class MobBehaviorAI {
             return;
         }
         
-        // Extract mob type from mobId (format: "mobType_uuid")
-        String mobType = getMobTypeFromId(mobId);
+        // Prefer deriving mobType from the entity (more reliable: many callers use UUID-only mobId).
+        String mobType = null;
+        if (mobEntity != null) {
+            mobType = mobEntity.getClass().getSimpleName().toLowerCase();
+        }
+        if (mobType == null || mobType.isEmpty()) {
+            // Fallback for callers that include a mobType prefix in the id.
+            mobType = getMobTypeFromId(mobId);
+        }
+        if (mobType != null && !mobType.isEmpty()) {
+            mobType = getFamilyBase(mobType);
+        }
         
         // Calculate reward based on outcome
         float reward = calculateReward(initialState, finalState, playerDied, mobDied);
         reward += damageDealt * 0.5f - damageTaken * 0.3f;  // Fine-grained feedback
+
+        // Federated learning: always report real action outcomes (does not depend on DJL).
+        // This is the primary driver for action diversity, non-flat rewards, and meaningful experience counts.
+        if (federatedLearning != null && mobType != null && action != null && !action.isEmpty()) {
+            boolean success = playerDied || (!mobDied && reward > 0.0f) || (damageDealt > damageTaken);
+            federatedLearning.recordCombatOutcome(mobType, action, reward, success);
+        }
         
         // HNN-inspired: Record combat experience for tier progression
         if (tierSystemEnabled && mobType != null) {
