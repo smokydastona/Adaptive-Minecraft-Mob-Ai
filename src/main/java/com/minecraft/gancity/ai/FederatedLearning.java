@@ -143,29 +143,13 @@ public class FederatedLearning {
         
         submission.addOutcome(reward, success);
         totalDataPointsContributed++;
-        
-        // FIX: First-encounter upload (bootstrap)
+
+        // Track first encounters for heartbeat metadata only.
+        // IMPORTANT: Do not upload single-action "bootstrap" tactics here.
+        // The coordinator accepts only one upload per (serverId,mobType) per round;
+        // a single-action bootstrap would lock out a later richer multi-action model.
         if (firstEncounters.add(mobType)) {
-            LOGGER.info("🚀 FIRST ENCOUNTER: {} - uploading bootstrap data", mobType);
-            syncExecutor.submit(() -> {
-                try {
-                    boolean uploaded = apiClient.submitTactic(
-                        mobType,
-                        action,
-                        reward,
-                        success ? "success" : "failure",
-                        success ? 1.0f : 0.0f,
-                        true  // bootstrap flag
-                    );
-                    if (uploaded) {
-                        LOGGER.info("✅ Bootstrap upload successful for {}", mobType);
-                    } else {
-                        LOGGER.warn("❌ Bootstrap upload failed for {}", mobType);
-                    }
-                } catch (Exception e) {
-                    LOGGER.error("Bootstrap upload error: {}", e.getMessage());
-                }
-            });
+            LOGGER.info("🚀 FIRST ENCOUNTER: {} - tracking (no bootstrap upload)", mobType);
         }
     }
     
@@ -207,6 +191,9 @@ public class FederatedLearning {
                 int mobUploadsOk = 0;
                 int mobUploadsFail = 0;
 
+                final java.util.Set<String> uploadedKeys = new java.util.HashSet<>();
+                int mobUploadsSkipped = 0;
+
                 for (Map.Entry<String, java.util.List<TacticSubmission>> mobEntry : byMob.entrySet()) {
                     String mobType = mobEntry.getKey();
                     java.util.List<TacticSubmission> submissions = mobEntry.getValue();
@@ -230,23 +217,42 @@ public class FederatedLearning {
 
                     if (tactics.size() == 0) continue;
 
+                    // Avoid uploading 1-action models that would freeze observability for this mobType in the round.
+                    if (tactics.size() < 2) {
+                        mobUploadsSkipped++;
+                        continue;
+                    }
+
                     boolean ok = apiClient.submitTacticsModel(mobType, tactics, false);
                     if (ok) {
                         mobUploadsOk++;
+                        // Remove only what we successfully uploaded; keep other mobTypes accumulating.
+                        for (TacticSubmission submission : submissions) {
+                            if (submission == null || !submission.isValid()) continue;
+                            uploadedKeys.add(submission.mobType + ":" + submission.action);
+                        }
                     } else {
                         mobUploadsFail++;
                     }
                 }
 
                 if (mobUploadsOk > 0) {
-                    LOGGER.info("Successfully submitted {} mob models ({} failed)", mobUploadsOk, mobUploadsFail);
+                    LOGGER.info("Successfully submitted {} mob models ({} failed, {} skipped)", mobUploadsOk, mobUploadsFail, mobUploadsSkipped);
                     lastSyncTime = currentTime;
 
-                    // Clear submitted tactics
-                    pendingSubmissions.clear();
-                    totalDataPointsContributed = 0;
+                    for (String key : uploadedKeys) {
+                        pendingSubmissions.remove(key);
+                    }
+
+                    // Recompute contributed points from remaining pending submissions.
+                    int remaining = 0;
+                    for (TacticSubmission submission : pendingSubmissions.values()) {
+                        if (submission == null) continue;
+                        remaining += submission.getTotalCount();
+                    }
+                    totalDataPointsContributed = remaining;
                 } else {
-                    LOGGER.warn("Failed to submit any mob models to API ({} attempted)", byMob.size());
+                    LOGGER.warn("No mob models submitted ({} attempted, {} skipped for <2 actions)", byMob.size(), mobUploadsSkipped);
                 }
             
         } catch (Exception e) {
@@ -328,11 +334,24 @@ public class FederatedLearning {
                             tacticData.addProperty("lastUpdate", System.currentTimeMillis());
                             tactics.add(submission.action, tacticData);
                         }
-                        if (tactics.size() > 0) {
-                            apiClient.submitTacticsModel(mobType, tactics, false);
+
+                        // Only upload when we have at least 2 actions for this mobType.
+                        if (tactics.size() >= 2) {
+                            boolean ok = apiClient.submitTacticsModel(mobType, tactics, false);
+                            if (ok) {
+                                for (TacticSubmission submission : mobEntry.getValue()) {
+                                    if (submission == null || !submission.isValid()) continue;
+                                    pendingSubmissions.remove(submission.mobType + ":" + submission.action);
+                                }
+                            }
                         }
                     }
-                    pendingSubmissions.clear();
+                    int remaining = 0;
+                    for (TacticSubmission submission : pendingSubmissions.values()) {
+                        if (submission == null) continue;
+                        remaining += submission.getTotalCount();
+                    }
+                    totalDataPointsContributed = remaining;
                 } else {
                     // Do NOT seed synthetic tactics.
                     // Heartbeat is sufficient for connectivity; synthetic actions freeze observability.
@@ -842,36 +861,72 @@ public class FederatedLearning {
         
         try {
             LOGGER.info("Force uploading {} local tactics to global repository...", pendingSubmissions.size());
-            
-            int successCount = 0;
-            int failCount = 0;
-            
-            // Submit each pending tactic
+
+            // Force submit using the same per-mobType multi-action model upload,
+            // while avoiding 1-action uploads that would lock the round.
+            final Map<String, java.util.List<TacticSubmission>> byMob = new java.util.HashMap<>();
             for (TacticSubmission submission : pendingSubmissions.values()) {
-                boolean success = apiClient.submitTactic(
-                    submission.mobType,
-                    submission.action,
-                    submission.getAverageReward(),
-                    submission.getSuccessRate() > 0.5f ? "success" : "failure",
-                    submission.getSuccessRate()  // Pass win rate for tier calculation
-                );
-                
-                if (success) {
-                    successCount++;
+                byMob.computeIfAbsent(submission.mobType, k -> new java.util.ArrayList<>()).add(submission);
+            }
+
+            int mobUploadsOk = 0;
+            int mobUploadsFail = 0;
+            int mobUploadsSkipped = 0;
+            final java.util.Set<String> uploadedKeys = new java.util.HashSet<>();
+
+            for (Map.Entry<String, java.util.List<TacticSubmission>> mobEntry : byMob.entrySet()) {
+                String mobType = mobEntry.getKey();
+
+                JsonObject tactics = new JsonObject();
+                for (TacticSubmission submission : mobEntry.getValue()) {
+                    if (submission == null || !submission.isValid()) continue;
+                    JsonObject tacticData = new JsonObject();
+                    tacticData.addProperty("avgReward", submission.getAverageReward());
+                    tacticData.addProperty("totalReward", submission.getTotalReward());
+                    tacticData.addProperty("count", submission.getTotalCount());
+                    tacticData.addProperty("successCount", submission.getSuccessCount());
+                    tacticData.addProperty("failureCount", submission.getFailureCount());
+                    tacticData.addProperty("successRate", submission.getSuccessRate());
+                    tacticData.addProperty("weightedAvgReward", submission.getAverageReward());
+                    tacticData.addProperty("momentum", 0.0);
+                    tacticData.addProperty("lastUpdate", System.currentTimeMillis());
+                    tactics.add(submission.action, tacticData);
+                }
+
+                if (tactics.size() == 0) continue;
+                if (tactics.size() < 2) {
+                    mobUploadsSkipped++;
+                    continue;
+                }
+
+                boolean ok = apiClient.submitTacticsModel(mobType, tactics, false);
+                if (ok) {
+                    mobUploadsOk++;
+                    for (TacticSubmission submission : mobEntry.getValue()) {
+                        if (submission == null || !submission.isValid()) continue;
+                        uploadedKeys.add(submission.mobType + ":" + submission.action);
+                    }
                 } else {
-                    failCount++;
+                    mobUploadsFail++;
                 }
             }
-            
-            if (successCount > 0) {
-                LOGGER.info("✓ Uploaded {} tactics to Cloudflare ({} failed)", successCount, failCount);
+
+            if (mobUploadsOk > 0) {
+                LOGGER.info("✓ Uploaded {} mob models to Cloudflare ({} failed, {} skipped)", mobUploadsOk, mobUploadsFail, mobUploadsSkipped);
                 lastSyncTime = System.currentTimeMillis();
-                
-                // Clear submitted tactics
-                pendingSubmissions.clear();
-                totalDataPointsContributed = 0;
+
+                for (String key : uploadedKeys) {
+                    pendingSubmissions.remove(key);
+                }
+
+                int remaining = 0;
+                for (TacticSubmission submission : pendingSubmissions.values()) {
+                    if (submission == null) continue;
+                    remaining += submission.getTotalCount();
+                }
+                totalDataPointsContributed = remaining;
             } else {
-                LOGGER.warn("⚠ Failed to upload any tactics to API");
+                LOGGER.warn("⚠ Failed to upload any mob models to API ({} skipped for <2 actions)", mobUploadsSkipped);
             }
             
         } catch (Exception e) {
