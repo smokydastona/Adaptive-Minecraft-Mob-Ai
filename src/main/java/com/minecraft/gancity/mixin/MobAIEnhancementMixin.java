@@ -432,6 +432,17 @@ public abstract class MobAIEnhancementMixin {
                         "trackActionInSequence", String.class, String.class, double.class
                     );
                     trackMethod.invoke(behaviorAI, mobId, previousAction, reward);
+
+                    // Federated learning: also record per-action outcomes (if supported).
+                    // Kept reflection-safe for backwards compatibility.
+                    try {
+                        java.lang.reflect.Method perAction = behaviorAI.getClass().getMethod(
+                            "recordPerActionOutcome", String.class, String.class, double.class, Mob.class
+                        );
+                        perAction.invoke(behaviorAI, mobType, previousAction, reward, mob);
+                    } catch (Exception ignored) {
+                        // Optional method; ignore if not present
+                    }
                 }
             } catch (Exception e) {
                 // Silently fail - use default action

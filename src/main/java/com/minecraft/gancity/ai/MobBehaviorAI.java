@@ -2536,6 +2536,34 @@ public class MobBehaviorAI {
             sequence.add(new ActionRecord(action, reward));
         }
     }
+
+    /**
+     * Record a per-action outcome signal for federated learning.
+     *
+     * Rationale: recording only the final action of a combat collapses the action space to ~1
+     * in low-volume servers. This method allows lightweight per-action telemetry that produces
+     * distinctActionsObserved >= 2 quickly, enabling real learning to begin.
+     */
+    public void recordPerActionOutcome(String mobType, String action, double reward, net.minecraft.world.entity.Mob mobEntity) {
+        if (!learningEnabled) return;
+        if (federatedLearning == null || !federatedLearning.isEnabled()) return;
+        if (mobType == null || mobType.isEmpty()) return;
+        if (action == null || action.isEmpty()) return;
+
+        String normalizedMobType = getFamilyBase(mobType.toLowerCase());
+        float r = (float) reward;
+        if (Float.isNaN(r) || Float.isInfinite(r)) return;
+
+        // Simple success heuristic: positive reward means the action helped.
+        boolean success = r > 0.0f;
+        federatedLearning.recordCombatOutcome(normalizedMobType, action, r, success);
+
+        // Tier progression gets an extra low-weighted signal from frequent action outcomes.
+        // (Kept intentionally minimal: only apply for clearly positive outcomes.)
+        if (tierSystemEnabled && success) {
+            recordCombatExperience(normalizedMobType, true);
+        }
+    }
     
     /**
      * End combat sequence and submit to Cloudflare for analysis

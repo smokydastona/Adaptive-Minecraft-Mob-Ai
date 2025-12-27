@@ -224,6 +224,10 @@ public class EnhancedMeleeGoal extends Goal {
             if (previousAction != null && !previousAction.equals(currentAction)) {
                 double reward = calculateActionReward();
                 behaviorAI.trackActionInSequence(mobId, previousAction, reward);
+
+                // Federated learning: record per-action signal (not just end-of-combat).
+                // This prevents action-space collapse in round logs on low-volume servers.
+                behaviorAI.recordPerActionOutcome(mobType, previousAction, reward, mob);
             }
         }
         } catch (Exception e) {
