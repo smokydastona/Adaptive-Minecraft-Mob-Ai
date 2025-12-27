@@ -2,6 +2,13 @@
 
 All notable changes to Adaptive Mob AI will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- Epic Fight (optional): Visual/Epic Fight signals now influence actual action selection (not just recommendations)
+  - When Epic Fight is installed and the target player is charging/holding skills or low stamina, mobs bias toward tactically appropriate actions already valid for the current state
+  - Uses soft-dependency reflection; no hard Epic Fight dependency required
+
 ## [1.1.174] - 2025-12-18
 
 ### Fixed
