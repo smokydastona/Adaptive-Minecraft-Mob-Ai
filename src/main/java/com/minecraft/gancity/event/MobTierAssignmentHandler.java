@@ -12,6 +12,9 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.monster.*;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -121,6 +124,10 @@ public class MobTierAssignmentHandler {
         
         // Apply difficulty multiplier to mob stats
         applyTierModifiers(mob, tier);
+
+        // Universal weapon capability: allow hostiles to use and pick up non-native weapons.
+        // This also assigns a simple weapon loadout so you actually see variety (e.g., zombies with bows).
+        applyUniversalWeaponRules(mob);
         
         LOGGER.debug("[Tier System] Assigned {} tier to {} (UUID: {}) - Health: {}/{}", 
             tier.getName().toUpperCase(), 
@@ -153,6 +160,38 @@ public class MobTierAssignmentHandler {
         // No additional checks needed since we already filter for Enemy type
         
         return true;
+    }
+
+    /**
+     * Give hostile mobs the ability to use any held weapon, and provide a basic randomized loadout.
+     *
+     * Notes:
+     * - Picking up loot is required so mobs can swap to weapons they find.
+     * - We assign a bow or sword so the feature is visible immediately.
+     */
+    private static void applyUniversalWeaponRules(Mob mob) {
+        if (!(mob instanceof Enemy)) {
+            return;
+        }
+
+        try {
+            mob.setCanPickUpLoot(true);
+
+            // Randomly give a melee or ranged weapon.
+            // Keep it simple (bow vs stone sword) to match the requested examples.
+            ItemStack weapon;
+            if (RANDOM.nextBoolean()) {
+                weapon = new ItemStack(Items.BOW);
+            } else {
+                weapon = new ItemStack(Items.STONE_SWORD);
+            }
+
+            mob.setItemSlot(EquipmentSlot.MAINHAND, weapon);
+        } catch (Exception e) {
+            // Non-critical; skip if a mob type rejects equipment changes.
+            LOGGER.debug("[Universal Weapons] Could not assign weapon to {}: {}",
+                mob.getType().toString(), e.getMessage());
+        }
     }
     
     /**
