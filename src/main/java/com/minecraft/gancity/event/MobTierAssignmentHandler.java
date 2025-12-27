@@ -78,6 +78,7 @@ public class MobTierAssignmentHandler {
     
     private static final String TIER_TAG = "AdaptiveMobAI_Tier";
     private static final String TIER_ASSIGNED_TAG = "AdaptiveMobAI_TierAssigned";
+    private static final String UNIVERSAL_WEAPONS_TAG = "AdaptiveMobAI_UniversalWeapons";
     
     // Compatibility status logged on first use (lazy initialization prevents classloading deadlock)
     
@@ -106,6 +107,9 @@ public class MobTierAssignmentHandler {
         
         // Check if tier already assigned (prevent reassignment on world reload)
         if (entityData.contains(TIER_TAG)) {
+            // Even if tier is already assigned, we still want to apply universal weapon capability
+            // exactly once for older mobs that predate the feature.
+            applyUniversalWeaponRulesOnce(mob);
             return;
         }
         
@@ -127,7 +131,7 @@ public class MobTierAssignmentHandler {
 
         // Universal weapon capability: allow hostiles to use and pick up non-native weapons.
         // This also assigns a simple weapon loadout so you actually see variety (e.g., zombies with bows).
-        applyUniversalWeaponRules(mob);
+        applyUniversalWeaponRulesOnce(mob);
         
         LOGGER.debug("[Tier System] Assigned {} tier to {} (UUID: {}) - Health: {}/{}", 
             tier.getName().toUpperCase(), 
@@ -169,13 +173,19 @@ public class MobTierAssignmentHandler {
      * - Picking up loot is required so mobs can swap to weapons they find.
      * - We assign a bow or sword so the feature is visible immediately.
      */
-    private static void applyUniversalWeaponRules(Mob mob) {
+    private static void applyUniversalWeaponRulesOnce(Mob mob) {
         if (!(mob instanceof Enemy)) {
             return;
         }
 
         try {
             mob.setCanPickUpLoot(true);
+
+            // Avoid re-randomizing equipment every time the entity loads.
+            CompoundTag persistentData = mob.getPersistentData();
+            if (persistentData.getBoolean(UNIVERSAL_WEAPONS_TAG)) {
+                return;
+            }
 
             // Randomly give a melee or ranged weapon.
             // Keep it simple and visible: bow/crossbow/trident/sword.
@@ -192,6 +202,15 @@ public class MobTierAssignmentHandler {
             }
 
             mob.setItemSlot(EquipmentSlot.MAINHAND, weapon);
+
+            // Mark as applied (persistent)
+            persistentData.putBoolean(UNIVERSAL_WEAPONS_TAG, true);
+
+            // Also store in entity NBT so it shows up in F3 like the tier tags.
+            CompoundTag entityData = new CompoundTag();
+            mob.saveWithoutId(entityData);
+            entityData.putBoolean(UNIVERSAL_WEAPONS_TAG, true);
+            mob.load(entityData);
         } catch (Exception e) {
             // Non-critical; skip if a mob type rejects equipment changes.
             LOGGER.debug("[Universal Weapons] Could not assign weapon to {}: {}",
