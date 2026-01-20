@@ -67,6 +67,26 @@ public final class PlayerMobLoadoutStore {
         return FMLPaths.CONFIGDIR.get().resolve("adaptivemobai-player-loadouts.json");
     }
 
+    /**
+     * Ensures the per-player loadout config file exists on disk so users can edit it
+     * even before any commands are run.
+     */
+    public static void ensureFileExists() {
+        synchronized (LOCK) {
+            Path file = configFile();
+            try {
+                Files.createDirectories(file.getParent());
+                if (!Files.exists(file)) {
+                    try (Writer writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+                        writer.write("{}\n");
+                    }
+                }
+            } catch (IOException e) {
+                GANCityMod.LOGGER.warn("Failed to create player loadout config ({}): {}", file, e.toString());
+            }
+        }
+    }
+
     public static void loadIfNeeded() {
         if (loaded) {
             return;
@@ -76,6 +96,9 @@ public final class PlayerMobLoadoutStore {
                 return;
             }
             loaded = true;
+
+            // Create an empty file up-front so users can edit it without using commands.
+            ensureFileExists();
 
             Path file = configFile();
             if (!Files.exists(file)) {
