@@ -19,6 +19,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ProjectileWeaponItem;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -159,6 +160,11 @@ public class MobTierAssignmentHandler {
         }
 
         CompoundTag persistentData = mob.getPersistentData();
+
+            // If no per-player override, fall back to global config per-mob loadouts.
+            if (weapon == null) {
+                weapon = GANCityMod.chooseConfiguredWeaponForMob(mobTypeId, RANDOM);
+            }
         if (persistentData.getBoolean(GENERIC_RANGED_GOAL_TAG)) {
             return;
         }
@@ -169,6 +175,14 @@ public class MobTierAssignmentHandler {
     }
     
     /**
+
+                // If mob spawned with a bow/crossbow, optionally give configured arrows.
+                if (weapon.getItem() instanceof ProjectileWeaponItem) {
+                    ItemStack arrows = GANCityMod.getConfiguredArrowStackForMob(mobTypeId);
+                    if (!arrows.isEmpty() && mob.getItemBySlot(EquipmentSlot.OFFHAND).isEmpty()) {
+                        mob.setItemSlot(EquipmentSlot.OFFHAND, arrows);
+                    }
+                }
      * Check if mob type is supported by adaptive AI
      * Now supports ALL hostile mobs, with compatibility checks for other mods
      */

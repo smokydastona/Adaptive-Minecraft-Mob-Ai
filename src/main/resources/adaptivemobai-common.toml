@@ -38,6 +38,37 @@
 	#Range: 0.5 ~ 3.0
 	aiDifficulty = 1.0
 
+[loadouts]
+	# === Global Mob Weapon Loadouts (Server-Wide) ===
+	#
+	# These loadouts apply to all players on the server.
+	# If you also use /amai loadout (player-specific JSON loadouts), the player-specific rules take priority.
+	#
+	# Format (up to 5 weapons):
+	# mobWeaponLoadouts = ["<mobId>=<weapon1>,<weapon2>,<weapon3>,<weapon4>,<weapon5>"]
+	#
+	# Use 'none' to allow unarmed spawns.
+	#
+	# Examples:
+	# mobWeaponLoadouts = [
+	#   "minecraft:zombie=minecraft:iron_sword,minecraft:stone_sword,none",
+	#   "minecraft:skeleton=minecraft:bow,none"
+	# ]
+	mobWeaponLoadouts = []
+
+	[loadouts.bows]
+		# Arrow type to give mobs when they spawn with a bow/crossbow.
+		# This is ammo placed in the OFFHAND so ranged mobs can shoot.
+		#
+		# Default arrow item id:
+		defaultBowArrowItem = "minecraft:arrow"
+		#
+		# Optional per-mob override format:
+		# mobBowArrowOverrides = ["<mobId>=<arrowItemId>"]
+		# Example:
+		# mobBowArrowOverrides = ["minecraft:skeleton=minecraft:spectral_arrow"]
+		mobBowArrowOverrides = []
+
 [mob_behaviors]
 	# === Individual Mob AI Toggles ===
 	

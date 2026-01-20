@@ -7,7 +7,11 @@ import com.minecraft.gancity.compat.ModCompatibility;
 import com.minecraft.gancity.config.PlayerMobLoadoutStore;
 import com.minecraft.gancity.mca.MCAIntegration;
 import com.mojang.logging.LogUtils;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -25,6 +29,14 @@ import net.minecraftforge.fml.event.config.ModConfigEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Random;
 
 @Mod(GANCityMod.MODID)
 @Mod.EventBusSubscriber(modid = GANCityMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.DEDICATED_SERVER)
@@ -69,6 +81,14 @@ public class GANCityMod {
     private static volatile boolean visualTierIndicators = true;
     private static volatile float expRateMultiplier = 1.0f;
     private static volatile boolean syncTiersWithFederation = true;
+
+    // Global (server-wide) mob weapon loadouts from config
+    // Format: mobTypeId -> up to 5 weapon item ids (including "none")
+    private static volatile Map<String, List<String>> globalMobWeaponLoadouts = Map.of();
+
+    // Global arrows for bow/crossbow weapons
+    private static volatile String defaultBowArrowItemId = "minecraft:arrow";
+    private static volatile Map<String, String> bowArrowOverrides = Map.of();
 
     private static final CommonConfig COMMON;
     private static final ForgeConfigSpec COMMON_SPEC;
@@ -167,6 +187,201 @@ public class GANCityMod {
         visualTierIndicators = COMMON.enableVisualTierIndicators.get();
         expRateMultiplier = COMMON.experienceRateMultiplier.get().floatValue();
         syncTiersWithFederation = COMMON.syncTiersWithFederation.get();
+
+        // Loadouts
+        globalMobWeaponLoadouts = parseMobWeaponLoadouts(COMMON.mobWeaponLoadouts.get(), 5);
+        defaultBowArrowItemId = normalizeItemId(COMMON.defaultBowArrowItem.get(), "minecraft:arrow", true);
+        bowArrowOverrides = parseKeyValueMap(COMMON.mobBowArrowOverrides.get());
+    }
+
+    public static ItemStack chooseConfiguredWeaponForMob(String mobTypeId, Random random) {
+        loadConfigIfNeeded();
+        if (mobTypeId == null || mobTypeId.isBlank()) {
+            return null;
+        }
+
+        List<String> options = globalMobWeaponLoadouts.get(mobTypeId);
+        if (options == null || options.isEmpty()) {
+            return null;
+        }
+
+        String selected = options.get(random.nextInt(options.size()));
+        if (selected == null) {
+            return null;
+        }
+
+        selected = selected.trim();
+        if (selected.isEmpty()) {
+            return null;
+        }
+
+        if (selected.equalsIgnoreCase("none")) {
+            return ItemStack.EMPTY;
+        }
+
+        ResourceLocation id = safeResourceLocation(selected);
+        if (id == null) {
+            return null;
+        }
+        Item item = BuiltInRegistries.ITEM.get(id);
+        if (item == null || item == Items.AIR) {
+            return null;
+        }
+        return new ItemStack(item);
+    }
+
+    public static ItemStack getConfiguredArrowStackForMob(String mobTypeId) {
+        loadConfigIfNeeded();
+
+        String arrowId = null;
+        if (mobTypeId != null && !mobTypeId.isBlank()) {
+            arrowId = bowArrowOverrides.get(mobTypeId);
+        }
+        if (arrowId == null || arrowId.isBlank()) {
+            arrowId = defaultBowArrowItemId;
+        }
+
+        arrowId = normalizeItemId(arrowId, "minecraft:arrow", true);
+        if (arrowId == null || arrowId.isBlank() || arrowId.equalsIgnoreCase("none")) {
+            return ItemStack.EMPTY;
+        }
+
+        ResourceLocation id = safeResourceLocation(arrowId);
+        if (id == null) {
+            return ItemStack.EMPTY;
+        }
+
+        Item item = BuiltInRegistries.ITEM.get(id);
+        if (item == null || item == Items.AIR) {
+            return ItemStack.EMPTY;
+        }
+
+        return new ItemStack(item, 64);
+    }
+
+    private static Map<String, List<String>> parseMobWeaponLoadouts(List<? extends String> rawEntries, int maxWeaponsPerMob) {
+        if (rawEntries == null || rawEntries.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, List<String>> result = new HashMap<>();
+        for (String entry : rawEntries) {
+            if (entry == null) {
+                continue;
+            }
+            String trimmed = entry.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+
+            int eq = trimmed.indexOf('=');
+            if (eq <= 0 || eq >= trimmed.length() - 1) {
+                continue;
+            }
+
+            String mobId = trimmed.substring(0, eq).trim();
+            String weaponsCsv = trimmed.substring(eq + 1).trim();
+            if (mobId.isEmpty() || weaponsCsv.isEmpty()) {
+                continue;
+            }
+
+            String[] parts = weaponsCsv.split(",");
+            List<String> weapons = new ArrayList<>();
+            for (String part : parts) {
+                if (weapons.size() >= maxWeaponsPerMob) {
+                    break;
+                }
+                if (part == null) {
+                    continue;
+                }
+                String weaponId = part.trim();
+                if (weaponId.isEmpty()) {
+                    continue;
+                }
+
+                // Allow explicit unarmed option
+                if (weaponId.equalsIgnoreCase("none")) {
+                    weapons.add("none");
+                    continue;
+                }
+
+                String normalized = normalizeItemId(weaponId, null, false);
+                if (normalized != null) {
+                    weapons.add(normalized);
+                }
+            }
+
+            if (!weapons.isEmpty()) {
+                result.put(mobId, Collections.unmodifiableList(weapons));
+            }
+        }
+
+        return result.isEmpty() ? Map.of() : Collections.unmodifiableMap(result);
+    }
+
+    private static Map<String, String> parseKeyValueMap(List<? extends String> rawEntries) {
+        if (rawEntries == null || rawEntries.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, String> result = new HashMap<>();
+        for (String entry : rawEntries) {
+            if (entry == null) {
+                continue;
+            }
+            String trimmed = entry.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+
+            int eq = trimmed.indexOf('=');
+            if (eq <= 0 || eq >= trimmed.length() - 1) {
+                continue;
+            }
+            String key = trimmed.substring(0, eq).trim();
+            String value = trimmed.substring(eq + 1).trim();
+            if (key.isEmpty() || value.isEmpty()) {
+                continue;
+            }
+
+            String normalizedValue = normalizeItemId(value, null, true);
+            if (normalizedValue != null) {
+                result.put(key, normalizedValue);
+            }
+        }
+
+        return result.isEmpty() ? Map.of() : Collections.unmodifiableMap(result);
+    }
+
+    private static String normalizeItemId(String raw, String fallback, boolean allowNone) {
+        if (raw == null) {
+            return fallback;
+        }
+        String value = raw.trim();
+        if (value.isEmpty()) {
+            return fallback;
+        }
+
+        String lower = value.toLowerCase(Locale.ROOT);
+        if (allowNone && lower.equals("none")) {
+            return "none";
+        }
+
+        // Permit bare ids like "arrow" as shorthand for "minecraft:arrow"
+        if (!lower.contains(":")) {
+            lower = "minecraft:" + lower;
+        }
+
+        // Validate
+        return safeResourceLocation(lower) != null ? lower : fallback;
+    }
+
+    private static ResourceLocation safeResourceLocation(String raw) {
+        try {
+            return new ResourceLocation(raw);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     @Mod.EventBusSubscriber(modid = GANCityMod.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
@@ -436,6 +651,10 @@ public class GANCityMod {
         final ForgeConfigSpec.DoubleValue experienceRateMultiplier;
         final ForgeConfigSpec.BooleanValue syncTiersWithFederation;
 
+        final ForgeConfigSpec.ConfigValue<List<? extends String>> mobWeaponLoadouts;
+        final ForgeConfigSpec.ConfigValue<String> defaultBowArrowItem;
+        final ForgeConfigSpec.ConfigValue<List<? extends String>> mobBowArrowOverrides;
+
         CommonConfig(ForgeConfigSpec.Builder builder) {
             builder.push("general");
             safeMode = builder.comment("Disable all ML/AI features entirely (emergency fallback)")
@@ -477,6 +696,32 @@ public class GANCityMod {
                 .defineInRange("experienceRateMultiplier", 1.0, 0.1, 5.0);
             syncTiersWithFederation = builder.comment("Sync tier data with federation")
                 .define("syncTiersWithFederation", true);
+            builder.pop();
+
+            builder.push("loadouts");
+            mobWeaponLoadouts = builder
+                .comment(
+                    "Global per-mob weapon loadouts (server-wide).",
+                    "Each entry is: <mobId>=<weapon1>,<weapon2>,<weapon3>,<weapon4>,<weapon5>",
+                    "Use 'none' as a weapon to allow unarmed spawns.",
+                    "Example: minecraft:zombie=minecraft:iron_sword,minecraft:stone_sword,none",
+                    "If a player-specific loadout exists, it overrides this."
+                )
+                .defineListAllowEmpty("mobWeaponLoadouts", List.of(), o -> o instanceof String);
+
+            builder.push("bows");
+            defaultBowArrowItem = builder
+                .comment("Default arrow item to give mobs when they spawn with a bow/crossbow")
+                .define("defaultBowArrowItem", "minecraft:arrow");
+            mobBowArrowOverrides = builder
+                .comment(
+                    "Per-mob arrow override when spawning with a bow/crossbow.",
+                    "Each entry is: <mobId>=<arrowItemId>",
+                    "Example: minecraft:skeleton=minecraft:spectral_arrow"
+                )
+                .defineListAllowEmpty("mobBowArrowOverrides", List.of(), o -> o instanceof String);
+            builder.pop();
+
             builder.pop();
         }
     }
