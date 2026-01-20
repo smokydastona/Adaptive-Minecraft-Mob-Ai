@@ -4,13 +4,17 @@ import com.minecraft.gancity.GANCityMod;
 import com.minecraft.gancity.ai.MobBehaviorAI;
 import com.minecraft.gancity.ai.VillagerDialogueAI;
 import com.minecraft.gancity.compat.ModCompatibility;
+import com.minecraft.gancity.config.PlayerMobLoadoutStore;
 import com.minecraft.gancity.mca.MCAIntegration;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Player;
 
 import java.util.Map;
 import java.util.UUID;
@@ -20,6 +24,9 @@ import java.util.UUID;
  */
 @SuppressWarnings("null")
 public class GANCityCommand {
+
+    private static final int MAX_LISTED_MOBS = 15;
+    private static final int MAX_LISTED_OPTIONS = 20;
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("amai")
@@ -36,7 +43,194 @@ public class GANCityCommand {
                 .executes(GANCityCommand::showFederationStatus))
             .then(Commands.literal("compat")
                 .executes(GANCityCommand::showCompatibility))
+            .then(Commands.literal("loadout")
+                .then(Commands.literal("list")
+                    .executes(GANCityCommand::loadoutList))
+                .then(Commands.literal("list")
+                    .then(Commands.argument("mob", StringArgumentType.word())
+                        .executes(context -> loadoutListMob(context, StringArgumentType.getString(context, "mob")))))
+                .then(Commands.literal("enable")
+                    .then(Commands.argument("enabled", BoolArgumentType.bool())
+                        .executes(context -> loadoutEnable(context, BoolArgumentType.getBool(context, "enabled")))))
+                .then(Commands.literal("add")
+                    .then(Commands.argument("mob", StringArgumentType.word())
+                        .then(Commands.argument("item", StringArgumentType.word())
+                            .then(Commands.argument("weight", DoubleArgumentType.doubleArg(0.000001))
+                                .executes(context -> loadoutAdd(context,
+                                    StringArgumentType.getString(context, "mob"),
+                                    StringArgumentType.getString(context, "item"),
+                                    DoubleArgumentType.getDouble(context, "weight")))))))
+                .then(Commands.literal("remove")
+                    .then(Commands.argument("mob", StringArgumentType.word())
+                        .then(Commands.argument("item", StringArgumentType.word())
+                            .executes(context -> loadoutRemove(context,
+                                StringArgumentType.getString(context, "mob"),
+                                StringArgumentType.getString(context, "item"))))))
+                .then(Commands.literal("clear")
+                    .then(Commands.argument("mob", StringArgumentType.word())
+                        .executes(context -> loadoutClear(context, StringArgumentType.getString(context, "mob")))))
+                .then(Commands.literal("reset")
+                    .executes(GANCityCommand::loadoutReset))
+            )
         );
+    }
+
+    private static Player requirePlayer(CommandSourceStack source) {
+        try {
+            return source.getPlayerOrException();
+        } catch (Exception e) {
+            source.sendFailure(Component.literal("This command must be run by a player."));
+            return null;
+        }
+    }
+
+    private static int loadoutList(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        Player player = requirePlayer(source);
+        if (player == null) {
+            return 0;
+        }
+
+        PlayerMobLoadoutStore.PlayerLoadout loadout = PlayerMobLoadoutStore.getOrCreate(player.getUUID());
+        source.sendSuccess(() -> Component.literal("§b=== Mob Weapon Loadouts (per-player) ===§r"), false);
+        source.sendSuccess(() -> Component.literal("Enabled: " + (loadout.enabled ? "§atrue§r" : "§cfalse§r")), false);
+        if (loadout.mobs == null || loadout.mobs.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("§7No per-mob loadouts set yet. Edit config or use /amai loadout add <mob> <item|none> <weight>.§r"), false);
+            return 1;
+        }
+
+        int shown = 0;
+        for (var entry : loadout.mobs.entrySet()) {
+            if (shown >= MAX_LISTED_MOBS) {
+                source.sendSuccess(() -> Component.literal("§7... (more mobs omitted)§r"), false);
+                break;
+            }
+            String mobId = entry.getKey();
+            PlayerMobLoadoutStore.MobLoadout mob = entry.getValue();
+            int count = mob != null && mob.options != null ? mob.options.size() : 0;
+            boolean enabled = mob != null && mob.enabled;
+            source.sendSuccess(() -> Component.literal(String.format("  §e%s§r enabled=%s options=%d", mobId, enabled, count)), false);
+            shown++;
+        }
+        source.sendSuccess(() -> Component.literal("§7Use /amai loadout list <mob> to see options. 'none' means unarmed.§r"), false);
+        return 1;
+    }
+
+    private static int loadoutListMob(CommandContext<CommandSourceStack> context, String mobId) {
+        CommandSourceStack source = context.getSource();
+        Player player = requirePlayer(source);
+        if (player == null) {
+            return 0;
+        }
+
+        PlayerMobLoadoutStore.PlayerLoadout loadout = PlayerMobLoadoutStore.getOrCreate(player.getUUID());
+        if (loadout.mobs == null || loadout.mobs.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("No loadouts configured."), false);
+            return 1;
+        }
+
+        String key = mobId == null ? PlayerMobLoadoutStore.DEFAULT_MOB_KEY : mobId;
+        PlayerMobLoadoutStore.MobLoadout mob = loadout.mobs.get(key);
+        if (mob == null) {
+            // Try normalized minecraft prefix if user typed bare.
+            mob = loadout.mobs.get("minecraft:" + key);
+            key = mob != null ? ("minecraft:" + key) : key;
+        }
+        if (mob == null) {
+            source.sendSuccess(() -> Component.literal("No loadout found for: " + mobId + " (try minecraft:zombie or 'default')"), false);
+            return 1;
+        }
+
+        final String keyFinal = key;
+        final boolean mobEnabled = mob.enabled;
+        source.sendSuccess(() -> Component.literal("§b=== Loadout: " + keyFinal + " ===§r"), false);
+        source.sendSuccess(() -> Component.literal("Enabled: " + (mobEnabled ? "§atrue§r" : "§cfalse§r")), false);
+        if (mob.options == null || mob.options.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("(no options)"), false);
+            return 1;
+        }
+
+        int shown = 0;
+        for (PlayerMobLoadoutStore.WeaponOption opt : mob.options) {
+            if (shown >= MAX_LISTED_OPTIONS) {
+                source.sendSuccess(() -> Component.literal("§7... (more options omitted)§r"), false);
+                break;
+            }
+            if (opt == null) {
+                continue;
+            }
+            source.sendSuccess(() -> Component.literal(String.format("  §f%s§r  weight=%.4f", String.valueOf(opt.item), opt.weight)), false);
+            shown++;
+        }
+        return 1;
+    }
+
+    private static int loadoutEnable(CommandContext<CommandSourceStack> context, boolean enabled) {
+        CommandSourceStack source = context.getSource();
+        Player player = requirePlayer(source);
+        if (player == null) {
+            return 0;
+        }
+
+        PlayerMobLoadoutStore.setEnabled(player.getUUID(), enabled);
+        source.sendSuccess(() -> Component.literal("Mob loadout config " + (enabled ? "§aenabled§r" : "§cdisabled§r") + "."), false);
+        return 1;
+    }
+
+    private static int loadoutAdd(CommandContext<CommandSourceStack> context, String mobId, String itemId, double weight) {
+        CommandSourceStack source = context.getSource();
+        Player player = requirePlayer(source);
+        if (player == null) {
+            return 0;
+        }
+
+        boolean ok = PlayerMobLoadoutStore.addOption(player.getUUID(), mobId, itemId, weight);
+        if (!ok) {
+            source.sendFailure(Component.literal("Could not add option. Examples: minecraft:diamond_sword 5.0 OR none 1.0"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Added/updated §f" + itemId + "§r for §e" + mobId + "§r (weight=" + weight + ")"), false);
+        return 1;
+    }
+
+    private static int loadoutRemove(CommandContext<CommandSourceStack> context, String mobId, String itemId) {
+        CommandSourceStack source = context.getSource();
+        Player player = requirePlayer(source);
+        if (player == null) {
+            return 0;
+        }
+
+        boolean ok = PlayerMobLoadoutStore.removeOption(player.getUUID(), mobId, itemId);
+        if (!ok) {
+            source.sendFailure(Component.literal("Could not remove option."));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Removed §f" + itemId + "§r for §e" + mobId + "§r"), false);
+        return 1;
+    }
+
+    private static int loadoutClear(CommandContext<CommandSourceStack> context, String mobId) {
+        CommandSourceStack source = context.getSource();
+        Player player = requirePlayer(source);
+        if (player == null) {
+            return 0;
+        }
+
+        PlayerMobLoadoutStore.clearOptions(player.getUUID(), mobId);
+        source.sendSuccess(() -> Component.literal("Cleared options for §e" + mobId + "§r"), false);
+        return 1;
+    }
+
+    private static int loadoutReset(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        Player player = requirePlayer(source);
+        if (player == null) {
+            return 0;
+        }
+
+        PlayerMobLoadoutStore.reset(player.getUUID());
+        source.sendSuccess(() -> Component.literal("Reset your mob loadout config."), false);
+        return 1;
     }
 
     private static int testDialogue(CommandContext<CommandSourceStack> context, String interactionType) {
@@ -96,6 +290,7 @@ public class GANCityCommand {
         source.sendSuccess(() -> Component.literal("  /amai stats - View AI statistics"), false);
         source.sendSuccess(() -> Component.literal("  /amai compat - View mod compatibility report"), false);
         source.sendSuccess(() -> Component.literal("  /amai test dialogue <type> - Test dialogue generation"), false);
+        source.sendSuccess(() -> Component.literal("  /amai loadout ... - Configure per-player, per-mob weapon chances (supports 'none' for unarmed)"), false);
         
         if (!mcaLoaded) {
             source.sendSuccess(() -> Component.literal(""), false);

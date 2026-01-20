@@ -1,5 +1,8 @@
 name: Build and Release
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [ main ]
@@ -26,29 +29,35 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
         cache: 'gradle'
-    
-    - name: Increment version
+
+    - name: Determine build version
       id: version
       run: |
-        # Read current version and increment patch number
+        set -euo pipefail
+
         CURRENT=$(grep "mod_version=" gradle.properties | cut -d'=' -f2)
-        IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-        NEW_PATCH=$((PATCH + 1))
-        VERSION="$MAJOR.$MINOR.$NEW_PATCH"
-        
-        # Update gradle.properties with new version
-        sed -i "s/mod_version=.*/mod_version=$VERSION/" gradle.properties
-        
-        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-        echo "Incremented version: $CURRENT → $VERSION"
-    
-    - name: Commit version bump
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add gradle.properties
-        git commit -m "Auto-increment version to ${{ steps.version.outputs.VERSION }} [skip ci]" || echo "No changes to commit"
-        git push || echo "No changes to push"
+
+        if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Tag build version: $VERSION"
+          exit 0
+        fi
+
+        if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == "refs/heads/main" ]]; then
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          NEW_PATCH=$((PATCH + 1))
+          VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+
+          sed -i "s/mod_version=.*/mod_version=$VERSION/" gradle.properties
+
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Incremented version: $CURRENT → $VERSION"
+          exit 0
+        fi
+
+        echo "VERSION=$CURRENT" >> $GITHUB_OUTPUT
+        echo "Building without version bump (event=$GITHUB_EVENT_NAME, ref=$GITHUB_REF): $CURRENT"
     
     - name: Verify version
       run: |
@@ -63,12 +72,22 @@ jobs:
     
     - name: List build artifacts
       run: ls -la build/libs/
+
+    - name: Commit version bump
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add gradle.properties
+        git commit -m "Auto-increment version to ${{ steps.version.outputs.VERSION }} [skip ci]" || echo "No changes to commit"
+        git push origin HEAD:main || echo "No changes to push"
     
     - name: Upload Mod JAR
       uses: actions/upload-artifact@v4
       with:
         name: Adaptive-Mob-Ai-${{ steps.version.outputs.VERSION }}
-        path: build/libs/Adaptive-Mob-Ai-${{ steps.version.outputs.VERSION }}.jar
+        path: build/libs/*.jar
+        if-no-files-found: error
         retention-days: 90
     
     - name: Create Release
@@ -76,7 +95,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          build/libs/Adaptive-Mob-Ai-${{ steps.version.outputs.VERSION }}.jar
+          build/libs/*.jar
         generate_release_notes: true
         draft: false
         prerelease: false

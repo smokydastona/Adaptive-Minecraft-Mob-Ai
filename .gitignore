@@ -4,6 +4,10 @@ image_at_*
 .vs
 .vscode
 
+# Gradle / IDE build outputs
+.gradle/
+bin/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -3,7 +3,10 @@ package com.minecraft.gancity.event;
 import com.minecraft.gancity.GANCityMod;
 import com.minecraft.gancity.ai.GenericRangedWeaponGoal;
 import com.minecraft.gancity.ai.TacticTier;
+import com.minecraft.gancity.config.PlayerMobLoadoutStore;
 import com.mojang.logging.LogUtils;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -211,21 +214,21 @@ public class MobTierAssignmentHandler {
                 return;
             }
 
-            // Randomly give a melee or ranged weapon.
-            // Keep it simple and visible: bow/crossbow/trident/sword.
-            int roll = RANDOM.nextInt(4);
-            ItemStack weapon;
-            if (roll == 0) {
-                weapon = new ItemStack(Items.BOW);
-            } else if (roll == 1) {
-                weapon = new ItemStack(Items.CROSSBOW);
-            } else if (roll == 2) {
-                weapon = new ItemStack(Items.TRIDENT);
-            } else {
-                weapon = new ItemStack(Items.STONE_SWORD);
-            }
+            // Prefer a per-player configured weapon list if a player is nearby.
+            Player nearest = findNearestPlayer(mob);
+            String mobTypeId = getMobTypeId(mob);
+            ItemStack weapon = PlayerMobLoadoutStore.chooseWeaponFor(nearest, mobTypeId, RANDOM);
 
-            mob.setItemSlot(EquipmentSlot.MAINHAND, weapon);
+            // null => no override, use default random behavior.
+            // EMPTY => explicitly unarmed.
+            if (weapon == null) {
+                weapon = PlayerMobLoadoutStore.defaultWeapon(RANDOM);
+                mob.setItemSlot(EquipmentSlot.MAINHAND, weapon);
+            } else if (weapon.isEmpty()) {
+                mob.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+            } else {
+                mob.setItemSlot(EquipmentSlot.MAINHAND, weapon);
+            }
 
             // Mark as applied (persistent)
             persistentData.putBoolean(UNIVERSAL_WEAPONS_TAG, true);
@@ -240,6 +243,33 @@ public class MobTierAssignmentHandler {
             LOGGER.debug("[Universal Weapons] Could not assign weapon to {}: {}",
                 mob.getType().toString(), e.getMessage());
         }
+    }
+
+    private static Player findNearestPlayer(Mob mob) {
+        try {
+            List<? extends Player> players = mob.level().players();
+            if (players == null || players.isEmpty()) {
+                return null;
+            }
+
+            return players.stream()
+                .filter(p -> p != null && p.isAlive() && !p.isSpectator())
+                .min(Comparator.comparingDouble(p -> p.distanceToSqr(mob)))
+                .orElse(null);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static String getMobTypeId(Mob mob) {
+        try {
+            ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType());
+            if (key != null) {
+                return key.toString();
+            }
+        } catch (Throwable ignored) {
+        }
+        return mob.getType().toString();
     }
     
     /**
