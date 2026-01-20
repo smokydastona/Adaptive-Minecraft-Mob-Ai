@@ -8,6 +8,7 @@ import com.minecraft.gancity.config.PlayerMobLoadoutStore;
 import com.minecraft.gancity.mca.MCAIntegration;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
@@ -16,17 +17,14 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.fml.event.config.ModConfigEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
-import net.minecraftforge.fml.loading.FMLPaths;
 import org.slf4j.Logger;
-
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 
 @Mod(GANCityMod.MODID)
 @Mod.EventBusSubscriber(modid = GANCityMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.DEDICATED_SERVER)
@@ -47,7 +45,7 @@ public class GANCityMod {
     private static boolean federationInitialized = false;
 
     // =====================================================
-    // Config (minimal TOML parsing; no ForgeConfigSpec yet)
+    // Config (ForgeConfigSpec so it appears in Forge's mod config UI)
     // =====================================================
     private static final String CONFIG_FILE_NAME = "adaptivemobai-common.toml";
     private static final String DEFAULT_CLOUDFLARE_ENDPOINT = "https://mca-ai-tactics-api.mc-ai-datcol.workers.dev";
@@ -71,6 +69,15 @@ public class GANCityMod {
     private static volatile boolean visualTierIndicators = true;
     private static volatile float expRateMultiplier = 1.0f;
     private static volatile boolean syncTiersWithFederation = true;
+
+    private static final CommonConfig COMMON;
+    private static final ForgeConfigSpec COMMON_SPEC;
+
+    static {
+        ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
+        COMMON = new CommonConfig(builder);
+        COMMON_SPEC = builder.build();
+    }
     
     // Auto-save tracking (10 minutes = 12000 ticks)
     private static final int AUTO_SAVE_INTERVAL_TICKS = 12000;
@@ -82,6 +89,10 @@ public class GANCityMod {
         LOGGER.info("=== MCA AI Enhanced: Constructor START ===");
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         modEventBus.addListener(this::commonSetup);
+
+        // Register Forge config so it shows up in the Mods menu
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, COMMON_SPEC, CONFIG_FILE_NAME);
+
         MinecraftForge.EVENT_BUS.register(this);
         System.out.println("=== MCA AI Enhanced: Constructor FINISH ===");
         LOGGER.info("=== MCA AI Enhanced: Constructor FINISH ===");
@@ -93,6 +104,7 @@ public class GANCityMod {
         
         event.enqueueWork(() -> {
             try {
+                // Ensure JSON config files exist so users can edit immediately.
                 ensureDefaultConfigFilesExist();
                 LOGGER.info("MCA AI Enhanced - Initializing AI systems (SERVER-ONLY)...");
                 
@@ -125,24 +137,54 @@ public class GANCityMod {
 
     private static void ensureDefaultConfigFilesExist() {
         try {
-            Path configDir = FMLPaths.CONFIGDIR.get();
-            Files.createDirectories(configDir);
-
-            Path commonConfig = configDir.resolve(CONFIG_FILE_NAME);
-            if (!Files.exists(commonConfig)) {
-                try (InputStream in = GANCityMod.class.getClassLoader().getResourceAsStream(CONFIG_FILE_NAME)) {
-                    if (in == null) {
-                        LOGGER.warn("Default config resource {} was not found in the JAR", CONFIG_FILE_NAME);
-                    } else {
-                        Files.copy(in, commonConfig, StandardCopyOption.REPLACE_EXISTING);
-                        LOGGER.info("Created default config: {}", commonConfig.toAbsolutePath());
-                    }
-                }
-            }
-
+            // The Forge config system will create the TOML automatically.
+            // We only need to ensure our JSON file exists.
             PlayerMobLoadoutStore.ensureFileExists();
         } catch (Exception e) {
             LOGGER.warn("Failed to ensure default config files exist: {}", e.toString());
+        }
+    }
+
+    private static void applyForgeConfig() {
+        safeMode = COMMON.safeMode.get();
+        enableMobAI = COMMON.enableMobAI.get();
+        enableVillagerDialogue = COMMON.enableVillagerDialogue.get();
+        enableLearning = COMMON.enableLearning.get();
+        aiDifficulty = COMMON.aiDifficulty.get().floatValue();
+
+        enableCrossMobLearning = COMMON.enableCrossMobLearning.get();
+        crossMobRewardMultiplier = COMMON.crossMobRewardMultiplier.get().floatValue();
+        enableContextualDifficulty = COMMON.enableContextualDifficulty.get();
+
+        enableFederatedLearning = COMMON.enableFederatedLearning.get();
+        cloudApiEndpoint = COMMON.cloudApiEndpoint.get();
+        if (cloudApiEndpoint == null || cloudApiEndpoint.isEmpty()) {
+            cloudApiEndpoint = DEFAULT_CLOUDFLARE_ENDPOINT;
+        }
+        cloudApiKey = COMMON.cloudApiKey.get();
+
+        tierProgressionEnabled = COMMON.enableTierProgression.get();
+        visualTierIndicators = COMMON.enableVisualTierIndicators.get();
+        expRateMultiplier = COMMON.experienceRateMultiplier.get().floatValue();
+        syncTiersWithFederation = COMMON.syncTiersWithFederation.get();
+    }
+
+    @Mod.EventBusSubscriber(modid = GANCityMod.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
+    public static final class ModConfigEvents {
+        @SubscribeEvent
+        public static void onConfigLoad(ModConfigEvent.Loading event) {
+            if (event.getConfig().getSpec() == COMMON_SPEC) {
+                applyForgeConfig();
+                configLoaded = true;
+            }
+        }
+
+        @SubscribeEvent
+        public static void onConfigReload(ModConfigEvent.Reloading event) {
+            if (event.getConfig().getSpec() == COMMON_SPEC) {
+                applyForgeConfig();
+                configLoaded = true;
+            }
         }
     }
 
@@ -364,36 +406,7 @@ public class GANCityMod {
                 return;
             }
             try {
-                java.nio.file.Path configPath = java.nio.file.Paths.get("config", CONFIG_FILE_NAME);
-                if (!java.nio.file.Files.exists(configPath)) {
-                    LOGGER.info("Config file not found, creating default config...");
-                    createDefaultConfigFromResources(configPath);
-                }
-
-                java.util.Map<String, String> kv = parseTomlKeyValues(configPath);
-
-                safeMode = parseBoolean(kv, "safeMode", false);
-                enableMobAI = parseBoolean(kv, "enableMobAI", true);
-                enableVillagerDialogue = parseBoolean(kv, "enableVillagerDialogue", true);
-                enableLearning = parseBoolean(kv, "enableLearning", true);
-                aiDifficulty = parseFloat(kv, "aiDifficulty", 1.0f);
-
-                enableCrossMobLearning = parseBoolean(kv, "enableCrossMobLearning", true);
-                crossMobRewardMultiplier = parseFloat(kv, "crossMobRewardMultiplier", 3.0f);
-                enableContextualDifficulty = parseBoolean(kv, "enableContextualDifficulty", true);
-
-                enableFederatedLearning = parseBoolean(kv, "enableFederatedLearning", true);
-                cloudApiEndpoint = parseString(kv, "cloudApiEndpoint", DEFAULT_CLOUDFLARE_ENDPOINT);
-                if (cloudApiEndpoint == null || cloudApiEndpoint.isEmpty()) {
-                    cloudApiEndpoint = DEFAULT_CLOUDFLARE_ENDPOINT;
-                }
-                cloudApiKey = parseString(kv, "cloudApiKey", "");
-
-                tierProgressionEnabled = parseBoolean(kv, "enableTierProgression", true);
-                visualTierIndicators = parseBoolean(kv, "enableVisualTierIndicators", true);
-                expRateMultiplier = parseFloat(kv, "experienceRateMultiplier", 1.0f);
-                syncTiersWithFederation = parseBoolean(kv, "syncTiersWithFederation", true);
-
+                applyForgeConfig();
                 configLoaded = true;
             } catch (Exception e) {
                 // Fail open with safe defaults (ON) so players have zero setup.
@@ -403,89 +416,68 @@ public class GANCityMod {
         }
     }
 
-    private static java.util.Map<String, String> parseTomlKeyValues(java.nio.file.Path configPath) throws java.io.IOException {
-        java.util.Map<String, String> kv = new java.util.HashMap<>();
-        java.util.List<String> lines = java.nio.file.Files.readAllLines(configPath);
-        for (String rawLine : lines) {
-            String line = rawLine;
-            int hashIdx = line.indexOf('#');
-            if (hashIdx >= 0) {
-                line = line.substring(0, hashIdx);
-            }
-            line = line.trim();
-            if (line.isEmpty() || line.startsWith("[")) {
-                continue;
-            }
-            int eqIdx = line.indexOf('=');
-            if (eqIdx <= 0) {
-                continue;
-            }
-            String key = line.substring(0, eqIdx).trim();
-            String value = line.substring(eqIdx + 1).trim();
-            kv.put(key, value);
-        }
-        return kv;
-    }
+    private static final class CommonConfig {
+        final ForgeConfigSpec.BooleanValue safeMode;
+        final ForgeConfigSpec.BooleanValue enableMobAI;
+        final ForgeConfigSpec.BooleanValue enableVillagerDialogue;
+        final ForgeConfigSpec.BooleanValue enableLearning;
+        final ForgeConfigSpec.DoubleValue aiDifficulty;
 
-    private static boolean parseBoolean(java.util.Map<String, String> kv, String key, boolean defaultValue) {
-        String value = kv.get(key);
-        if (value == null) {
-            return defaultValue;
-        }
-        value = stripQuotes(value).trim();
-        if (value.equalsIgnoreCase("true")) return true;
-        if (value.equalsIgnoreCase("false")) return false;
-        return defaultValue;
-    }
+        final ForgeConfigSpec.BooleanValue enableCrossMobLearning;
+        final ForgeConfigSpec.DoubleValue crossMobRewardMultiplier;
+        final ForgeConfigSpec.BooleanValue enableContextualDifficulty;
 
-    private static float parseFloat(java.util.Map<String, String> kv, String key, float defaultValue) {
-        String value = kv.get(key);
-        if (value == null) {
-            return defaultValue;
-        }
-        value = stripQuotes(value).trim();
-        try {
-            return Float.parseFloat(value);
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
-    }
+        final ForgeConfigSpec.BooleanValue enableFederatedLearning;
+        final ForgeConfigSpec.ConfigValue<String> cloudApiEndpoint;
+        final ForgeConfigSpec.ConfigValue<String> cloudApiKey;
 
-    private static String parseString(java.util.Map<String, String> kv, String key, String defaultValue) {
-        String value = kv.get(key);
-        if (value == null) {
-            return defaultValue;
-        }
-        value = stripQuotes(value).trim();
-        return value;
-    }
+        final ForgeConfigSpec.BooleanValue enableTierProgression;
+        final ForgeConfigSpec.BooleanValue enableVisualTierIndicators;
+        final ForgeConfigSpec.DoubleValue experienceRateMultiplier;
+        final ForgeConfigSpec.BooleanValue syncTiersWithFederation;
 
-    private static String stripQuotes(String value) {
-        if (value == null) {
-            return null;
-        }
-        String v = value.trim();
-        if ((v.startsWith("\"") && v.endsWith("\"")) || (v.startsWith("'") && v.endsWith("'"))) {
-            return v.substring(1, v.length() - 1);
-        }
-        return v;
-    }
-    
-    /**
-     * Create default config file from resources
-     */
-    private static void createDefaultConfigFromResources(java.nio.file.Path configPath) throws java.io.IOException {
-        // Create config directory if it doesn't exist
-        java.nio.file.Files.createDirectories(configPath.getParent());
-        
-        // Copy from resources to config directory
-        try (java.io.InputStream inputStream = GANCityMod.class.getResourceAsStream("/adaptivemobai-common.toml")) {
-            if (inputStream != null) {
-                java.nio.file.Files.copy(inputStream, configPath);
-                LOGGER.info("Created default config at {}", configPath);
-            } else {
-                LOGGER.error("Could not find default config in resources");
-            }
+        CommonConfig(ForgeConfigSpec.Builder builder) {
+            builder.push("general");
+            safeMode = builder.comment("Disable all ML/AI features entirely (emergency fallback)")
+                .define("safeMode", false);
+            enableMobAI = builder.comment("Enable AI-enhanced mob behavior")
+                .define("enableMobAI", true);
+            enableVillagerDialogue = builder.comment("Enable AI-powered villager dialogue (requires MCA Reborn)")
+                .define("enableVillagerDialogue", true);
+            enableLearning = builder.comment("Allow mobs to learn from combat outcomes")
+                .define("enableLearning", true);
+            aiDifficulty = builder.comment("Mob AI difficulty multiplier")
+                .defineInRange("aiDifficulty", 1.0, 0.5, 3.0);
+            builder.pop();
+
+            builder.push("advanced");
+            enableCrossMobLearning = builder.comment("Enable cross-mob emergent learning")
+                .define("enableCrossMobLearning", true);
+            crossMobRewardMultiplier = builder.comment("Reward multiplier for borrowed tactics")
+                .defineInRange("crossMobRewardMultiplier", 3.0, 1.0, 10.0);
+            enableContextualDifficulty = builder.comment("Enable contextual difficulty")
+                .define("enableContextualDifficulty", true);
+            builder.pop();
+
+            builder.push("federated_learning");
+            enableFederatedLearning = builder.comment("Enable federated learning")
+                .define("enableFederatedLearning", true);
+            cloudApiEndpoint = builder.comment("Cloudflare Worker API endpoint")
+                .define("cloudApiEndpoint", DEFAULT_CLOUDFLARE_ENDPOINT);
+            cloudApiKey = builder.comment("Cloud API key for authentication")
+                .define("cloudApiKey", "");
+            builder.pop();
+
+            builder.push("tier_progression");
+            enableTierProgression = builder.comment("Enable tier progression")
+                .define("enableTierProgression", true);
+            enableVisualTierIndicators = builder.comment("Enable visual tier indicators")
+                .define("enableVisualTierIndicators", true);
+            experienceRateMultiplier = builder.comment("Experience rate multiplier")
+                .defineInRange("experienceRateMultiplier", 1.0, 0.1, 5.0);
+            syncTiersWithFederation = builder.comment("Sync tier data with federation")
+                .define("syncTiersWithFederation", true);
+            builder.pop();
         }
     }
 }
