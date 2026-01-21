@@ -32,6 +32,24 @@ import java.util.stream.Collectors;
 public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
     private static final String CONFIG_FILE_NAME = "adaptivemobai-common.toml";
 
+    private static final List<String> DEFAULT_COMBAT_MOBS = List.of(
+        "minecraft:zombie",
+        "minecraft:zombie_villager",
+        "minecraft:husk",
+        "minecraft:drowned",
+        "minecraft:skeleton",
+        "minecraft:stray",
+        "minecraft:wither_skeleton",
+        "minecraft:pillager",
+        "minecraft:vindicator",
+        "minecraft:evoker",
+        "minecraft:witch",
+        "minecraft:piglin",
+        "minecraft:piglin_brute",
+        "minecraft:zombified_piglin",
+        "minecraft:illusioner"
+    );
+
     private final Screen parent;
 
     private EditBox mobSearch;
@@ -47,7 +65,8 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
     private Button mobArrowOverride;
 
     private List<String> allMobIds = List.of();
-    private List<String> allItemIds = List.of();
+    private List<String> allWeaponItemIds = List.of();
+    private List<String> allArrowItemIds = List.of();
 
     private String selectedMobId;
 
@@ -61,10 +80,11 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
 
     @Override
     protected void init() {
-        allMobIds = buildMobIdList();
-        allItemIds = buildItemIdList();
-
         loadFromConfigFile();
+
+        allMobIds = buildMobIdList(loadouts.keySet());
+        allWeaponItemIds = buildWeaponItemIdList();
+        allArrowItemIds = buildArrowItemIdList();
 
         int leftWidth = Math.max(220, this.width / 3);
         int rightX = leftWidth + 14;
@@ -74,30 +94,34 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
         mobSearch.setResponder(s -> refreshMobList());
         addRenderableWidget(mobSearch);
 
-        mobList = new MobList(this.minecraft, leftWidth, this.height - 70, 36, this.height - 58, 18);
+        int bottomButtonsY = this.height - 28;
+        mobList = new MobList(this.minecraft, leftWidth, this.height, 36, bottomButtonsY - 12, 18);
         mobList.setLeftPos(10);
         addRenderableWidget(mobList);
 
         int rowY = 42;
-        int rowH = 22;
+        int rows = 7; // 5 weapon slots + 2 arrow settings
+        int gap = 4;
+        int maxContentHeight = (bottomButtonsY - 12) - rowY;
+        int rowH = Math.max(14, Math.min(22, (maxContentHeight - (rows - 1) * gap) / rows));
         int fieldW = Math.min(300, this.width - rightX - 12);
 
+        int step = rowH + gap;
         weapon1 = addRenderableWidget(Button.builder(Component.literal("Weapon 1: (empty)"), b -> pickWeapon(0)).bounds(rightX, rowY, fieldW, rowH).build());
-        weapon2 = addRenderableWidget(Button.builder(Component.literal("Weapon 2: (empty)"), b -> pickWeapon(1)).bounds(rightX, rowY + rowH + 6, fieldW, rowH).build());
-        weapon3 = addRenderableWidget(Button.builder(Component.literal("Weapon 3: (empty)"), b -> pickWeapon(2)).bounds(rightX, rowY + (rowH + 6) * 2, fieldW, rowH).build());
-        weapon4 = addRenderableWidget(Button.builder(Component.literal("Weapon 4: (empty)"), b -> pickWeapon(3)).bounds(rightX, rowY + (rowH + 6) * 3, fieldW, rowH).build());
-        weapon5 = addRenderableWidget(Button.builder(Component.literal("Weapon 5: (empty)"), b -> pickWeapon(4)).bounds(rightX, rowY + (rowH + 6) * 4, fieldW, rowH).build());
+        weapon2 = addRenderableWidget(Button.builder(Component.literal("Weapon 2: (empty)"), b -> pickWeapon(1)).bounds(rightX, rowY + step, fieldW, rowH).build());
+        weapon3 = addRenderableWidget(Button.builder(Component.literal("Weapon 3: (empty)"), b -> pickWeapon(2)).bounds(rightX, rowY + step * 2, fieldW, rowH).build());
+        weapon4 = addRenderableWidget(Button.builder(Component.literal("Weapon 4: (empty)"), b -> pickWeapon(3)).bounds(rightX, rowY + step * 3, fieldW, rowH).build());
+        weapon5 = addRenderableWidget(Button.builder(Component.literal("Weapon 5: (empty)"), b -> pickWeapon(4)).bounds(rightX, rowY + step * 4, fieldW, rowH).build());
 
-        int bowsY = rowY + (rowH + 6) * 5 + 14;
-        globalDefaultArrow = addRenderableWidget(Button.builder(Component.literal("Default Arrow: minecraft:arrow"), b -> pickGlobalDefaultArrow()).bounds(rightX, bowsY, fieldW, rowH).build());
-        mobArrowOverride = addRenderableWidget(Button.builder(Component.literal("Mob Arrow Override: (default)"), b -> pickMobArrowOverride()).bounds(rightX, bowsY + rowH + 6, fieldW, rowH).build());
+        globalDefaultArrow = addRenderableWidget(Button.builder(Component.literal("Default Arrow: minecraft:arrow"), b -> pickGlobalDefaultArrow()).bounds(rightX, rowY + step * 5, fieldW, rowH).build());
+        mobArrowOverride = addRenderableWidget(Button.builder(Component.literal("Mob Arrow Override: (default)"), b -> pickMobArrowOverride()).bounds(rightX, rowY + step * 6, fieldW, rowH).build());
 
         addRenderableWidget(Button.builder(Component.literal("Save"), b -> saveAndClose())
-            .bounds(rightX, this.height - 34, 100, 20)
+            .bounds(rightX, bottomButtonsY, 100, 20)
             .build());
 
         addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onClose())
-            .bounds(rightX + 110, this.height - 34, 100, 20)
+            .bounds(rightX + 110, bottomButtonsY, 100, 20)
             .build());
 
         // default selection
@@ -185,7 +209,7 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
         List<String> options = new ArrayList<>();
         options.add("(empty)");
         options.add("none");
-        options.addAll(allItemIds);
+        options.addAll(allWeaponItemIds);
 
         String current = mobLoadout.weapons.get(slot);
         String currentDisplay = (current == null || current.isBlank()) ? "(empty)" : current;
@@ -205,10 +229,7 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
 
     private void pickGlobalDefaultArrow() {
         List<String> options = new ArrayList<>();
-        options.add("minecraft:arrow");
-        options.add("minecraft:spectral_arrow");
-        options.add("minecraft:tipped_arrow");
-        options.addAll(allItemIds);
+        options.addAll(allArrowItemIds);
 
         String current = defaultArrowId == null || defaultArrowId.isBlank() ? "minecraft:arrow" : defaultArrowId;
 
@@ -238,10 +259,7 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
 
         List<String> options = new ArrayList<>();
         options.add("(default)");
-        options.add("minecraft:arrow");
-        options.add("minecraft:spectral_arrow");
-        options.add("minecraft:tipped_arrow");
-        options.addAll(allItemIds);
+        options.addAll(allArrowItemIds);
 
         String current = mobLoadout.arrowOverride;
         String currentDisplay = (current == null || current.isBlank()) ? "(default)" : current;
@@ -354,10 +372,17 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
         return lower;
     }
 
-    private static List<String> buildMobIdList() {
+    private static List<String> buildMobIdList(java.util.Set<String> configuredMobIds) {
         try {
+            java.util.Set<String> allow = new java.util.HashSet<>(DEFAULT_COMBAT_MOBS);
+            if (configuredMobIds != null) {
+                allow.addAll(configuredMobIds);
+            }
+
+            // Only show combat-capable mobs (plus any mobs already configured in the file).
             return ForgeRegistries.ENTITY_TYPES.getKeys().stream()
                 .map(ResourceLocation::toString)
+                .filter(allow::contains)
                 .sorted()
                 .collect(Collectors.toList());
         } catch (Throwable ignored) {
@@ -365,14 +390,61 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
         }
     }
 
-    private static List<String> buildItemIdList() {
+    private static List<String> buildWeaponItemIdList() {
         try {
             return ForgeRegistries.ITEMS.getKeys().stream()
-                .map(ResourceLocation::toString)
                 .sorted()
+                .map(id -> {
+                    Item item = ForgeRegistries.ITEMS.getValue(id);
+                    if (item == null) {
+                        return null;
+                    }
+
+                    // Keep the picker focused: only items that are clearly combat gear.
+                    if (item instanceof net.minecraft.world.item.SwordItem) {
+                        return id.toString();
+                    }
+                    if (item instanceof net.minecraft.world.item.AxeItem) {
+                        return id.toString();
+                    }
+                    if (item instanceof net.minecraft.world.item.BowItem) {
+                        return id.toString();
+                    }
+                    if (item instanceof net.minecraft.world.item.CrossbowItem) {
+                        return id.toString();
+                    }
+                    if (item instanceof net.minecraft.world.item.TridentItem) {
+                        return id.toString();
+                    }
+                    if (item instanceof net.minecraft.world.item.ShieldItem) {
+                        return id.toString();
+                    }
+
+                    return null;
+                })
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
         } catch (Throwable ignored) {
             return List.of();
+        }
+    }
+
+    private static List<String> buildArrowItemIdList() {
+        try {
+            return ForgeRegistries.ITEMS.getKeys().stream()
+                .sorted()
+                .map(id -> {
+                    Item item = ForgeRegistries.ITEMS.getValue(id);
+                    if (item instanceof net.minecraft.world.item.ArrowItem) {
+                        return id.toString();
+                    }
+                    return null;
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        } catch (Throwable ignored) {
+            // Conservative defaults
+            return List.of("minecraft:arrow", "minecraft:spectral_arrow", "minecraft:tipped_arrow");
         }
     }
 

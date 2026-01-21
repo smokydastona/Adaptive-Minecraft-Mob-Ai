@@ -39,17 +39,19 @@ public final class StringSelectScreen extends Screen {
         int w = Math.min(420, this.width - 20);
         int x = (this.width - w) / 2;
 
+        int bottomButtonsY = this.height - 28;
+
         search = new EditBox(this.font, x, 18, w, 18, Component.literal("Search"));
         search.setMaxLength(128);
         search.setResponder(s -> refreshList());
         addRenderableWidget(search);
 
-        list = new OptionsList(this.minecraft, w, this.height - 80, 44, this.height - 58, 18);
+        list = new OptionsList(this.minecraft, w, this.height, 44, bottomButtonsY - 12, 18);
         list.setLeftPos(x);
         addRenderableWidget(list);
 
         addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onClose())
-            .bounds(x, this.height - 34, 100, 20)
+            .bounds(x, bottomButtonsY, 100, 20)
             .build());
 
         refreshList();
