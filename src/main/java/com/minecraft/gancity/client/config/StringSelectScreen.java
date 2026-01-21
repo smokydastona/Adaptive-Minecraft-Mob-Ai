@@ -13,9 +13,12 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.function.Consumer;
 
+import javax.annotation.Nonnull;
+
 /**
  * Simple searchable selector screen for strings (used as a "dropdown" picker).
  */
+@SuppressWarnings("null")
 public final class StringSelectScreen extends Screen {
     private final Screen parent;
     private final List<String> allOptions;
@@ -105,7 +108,7 @@ public final class StringSelectScreen extends Screen {
             private final String option;
 
             Entry(String option) {
-                this.option = option;
+                this.option = Objects.requireNonNull(option, "option");
             }
 
             @Override
@@ -114,7 +117,7 @@ public final class StringSelectScreen extends Screen {
             }
 
             @Override
-            public void render(net.minecraft.client.gui.GuiGraphics gfx, int index, int y, int x, int rowWidth, int rowHeight, int mouseX, int mouseY, boolean hovered, float partialTick) {
+            public void render(@Nonnull net.minecraft.client.gui.GuiGraphics gfx, int index, int y, int x, int rowWidth, int rowHeight, int mouseX, int mouseY, boolean hovered, float partialTick) {
                 int color = Objects.equals(currentSelection, option) ? 0xFFFFCC00 : 0xFFE0E0E0;
                 gfx.drawString(font, option, x + 4, y + 4, color, false);
             }

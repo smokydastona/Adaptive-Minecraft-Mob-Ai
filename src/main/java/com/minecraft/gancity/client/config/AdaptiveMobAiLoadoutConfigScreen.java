@@ -8,9 +8,14 @@ import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.item.Item;
+import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.loading.FMLPaths;
 import net.minecraftforge.registries.ForgeRegistries;
+
+import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -30,26 +35,9 @@ import java.util.stream.Collectors;
  *
  * Uses simple searchable selector screens so players can pick mob + items without typing ids.
  */
+@SuppressWarnings("null")
 public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
     private static final String CONFIG_FILE_NAME = "adaptivemobai-common.toml";
-
-    private static final List<String> DEFAULT_COMBAT_MOBS = List.of(
-        "minecraft:zombie",
-        "minecraft:zombie_villager",
-        "minecraft:husk",
-        "minecraft:drowned",
-        "minecraft:skeleton",
-        "minecraft:stray",
-        "minecraft:wither_skeleton",
-        "minecraft:pillager",
-        "minecraft:vindicator",
-        "minecraft:evoker",
-        "minecraft:witch",
-        "minecraft:piglin",
-        "minecraft:piglin_brute",
-        "minecraft:zombified_piglin",
-        "minecraft:illusioner"
-    );
 
     private final Screen parent;
 
@@ -391,19 +379,40 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
 
     private static List<String> buildMobIdList(java.util.Set<String> configuredMobIds) {
         try {
-            java.util.Set<String> allow = new java.util.HashSet<>(DEFAULT_COMBAT_MOBS);
-            if (configuredMobIds != null) {
-                allow.addAll(configuredMobIds);
-            }
+            java.util.Set<String> configured = configuredMobIds == null ? java.util.Set.of() : new java.util.HashSet<>(configuredMobIds);
+            boolean iceAndFireLoaded = isModLoaded("iceandfire");
 
-            // Only show combat-capable mobs (plus any mobs already configured in the file).
+            // Show all vanilla + modded hostile mobs by default, plus any mobs already configured in the file.
+            // This prevents the config screen from "missing" mobs that the server-side logic supports.
             return ForgeRegistries.ENTITY_TYPES.getKeys().stream()
-                .map(ResourceLocation::toString)
-                .filter(allow::contains)
                 .sorted()
+                .filter(key -> {
+                    String id = key.toString();
+                    if (configured.contains(id)) {
+                        return true;
+                    }
+                    if (iceAndFireLoaded && id.startsWith("iceandfire:")) {
+                        return false;
+                    }
+
+                    EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(key);
+                    if (type == null) {
+                        return false;
+                    }
+                    return type.getCategory() == MobCategory.MONSTER;
+                })
+                .map(ResourceLocation::toString)
                 .collect(Collectors.toList());
         } catch (Throwable ignored) {
             return List.of();
+        }
+    }
+
+    private static boolean isModLoaded(String modId) {
+        try {
+            return ModList.get().isLoaded(modId);
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -510,7 +519,7 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
             private final String mobId;
 
             Entry(String mobId) {
-                this.mobId = mobId;
+                this.mobId = Objects.requireNonNull(mobId, "mobId");
             }
 
             @Override
@@ -519,7 +528,7 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
             }
 
             @Override
-            public void render(net.minecraft.client.gui.GuiGraphics gfx, int index, int y, int x, int rowWidth, int rowHeight, int mouseX, int mouseY, boolean hovered, float partialTick) {
+            public void render(@Nonnull net.minecraft.client.gui.GuiGraphics gfx, int index, int y, int x, int rowWidth, int rowHeight, int mouseX, int mouseY, boolean hovered, float partialTick) {
                 int color = Objects.equals(selectedMobId, mobId) ? 0xFFFFCC00 : 0xFFE0E0E0;
                 gfx.drawString(font, mobId, x + 4, y + 4, color, false);
             }

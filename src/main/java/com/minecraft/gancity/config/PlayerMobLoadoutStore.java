@@ -397,13 +397,13 @@ public final class PlayerMobLoadoutStore {
     public static ItemStack defaultWeapon(Random random) {
         int roll = random.nextInt(4);
         if (roll == 0) {
-            return new ItemStack(Items.BOW);
+            return Items.BOW.getDefaultInstance();
         } else if (roll == 1) {
-            return new ItemStack(Items.CROSSBOW);
+            return Items.CROSSBOW.getDefaultInstance();
         } else if (roll == 2) {
-            return new ItemStack(Items.TRIDENT);
+            return Items.TRIDENT.getDefaultInstance();
         }
-        return new ItemStack(Items.STONE_SWORD);
+        return Items.STONE_SWORD.getDefaultInstance();
     }
 
     private static List<String> listFor(PlayerLoadout loadout, String category) {
@@ -520,6 +520,9 @@ public final class PlayerMobLoadoutStore {
     }
 
     private static Item resolveItem(String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            return null;
+        }
         ResourceLocation rl = ResourceLocation.tryParse(itemId);
         if (rl == null) {
             return null;
