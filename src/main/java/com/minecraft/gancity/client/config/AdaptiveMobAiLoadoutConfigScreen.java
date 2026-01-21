@@ -71,6 +71,9 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
 
     private String selectedMobId;
 
+    private boolean loadedFromDisk;
+    private String mobSearchQuery = "";
+
     private final Map<String, MobLoadout> loadouts = new HashMap<>();
     private String defaultArrowId = "minecraft:arrow";
 
@@ -81,7 +84,10 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
 
     @Override
     protected void init() {
-        loadFromConfigFile();
+        if (!loadedFromDisk) {
+            loadFromConfigFile();
+            loadedFromDisk = true;
+        }
 
         allMobIds = buildMobIdList(loadouts.keySet());
         allWeaponItemIds = buildWeaponItemIdList();
@@ -92,7 +98,11 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
 
         mobSearch = new EditBox(this.font, 10, 12, leftWidth - 20, 18, Component.literal("Search mobs"));
         mobSearch.setMaxLength(128);
-        mobSearch.setResponder(s -> refreshMobList());
+        mobSearch.setValue(mobSearchQuery == null ? "" : mobSearchQuery);
+        mobSearch.setResponder(s -> {
+            mobSearchQuery = s;
+            refreshMobList();
+        });
         addRenderableWidget(mobSearch);
 
         int bottomButtonsY = this.height - 28;
@@ -125,12 +135,16 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
             .bounds(rightX + 110, bottomButtonsY, 100, 20)
             .build());
 
-        // default selection
-        if (!allMobIds.isEmpty()) {
+        // Preserve selection when returning from selector screens
+        if (selectedMobId != null && allMobIds.contains(selectedMobId)) {
+            setSelectedMob(selectedMobId);
+        } else if (!allMobIds.isEmpty()) {
             setSelectedMob(allMobIds.get(0));
         } else {
             setSelectedMob(null);
         }
+
+        refreshMobList();
 
         refreshRightPanel();
     }
@@ -145,7 +159,7 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
             return;
         }
 
-        String q = mobSearch == null ? "" : mobSearch.getValue();
+        String q = mobSearch == null ? mobSearchQuery : mobSearch.getValue();
         String query = q == null ? "" : q.trim().toLowerCase(Locale.ROOT);
 
         List<String> filtered;
