@@ -45,7 +45,7 @@ public final class StringSelectScreen extends Screen {
         addRenderableWidget(search);
 
         list = new OptionsList(this.minecraft, w, this.height - 80, 44, this.height - 58, 18);
-        list.setX(x);
+        list.setLeftPos(x);
         addRenderableWidget(list);
 
         addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onClose())

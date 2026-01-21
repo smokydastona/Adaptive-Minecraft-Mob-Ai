@@ -5,7 +5,6 @@ import com.minecraft.gancity.ai.GenericRangedWeaponGoal;
 import com.minecraft.gancity.ai.TacticTier;
 import com.minecraft.gancity.config.PlayerMobLoadoutStore;
 import com.mojang.logging.LogUtils;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -25,6 +24,7 @@ import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.registries.ForgeRegistries;
 import org.slf4j.Logger;
 
 import java.util.Comparator;
@@ -160,11 +160,6 @@ public class MobTierAssignmentHandler {
         }
 
         CompoundTag persistentData = mob.getPersistentData();
-
-            // If no per-player override, fall back to global config per-mob loadouts.
-            if (weapon == null) {
-                weapon = GANCityMod.chooseConfiguredWeaponForMob(mobTypeId, RANDOM);
-            }
         if (persistentData.getBoolean(GENERIC_RANGED_GOAL_TAG)) {
             return;
         }
@@ -175,14 +170,6 @@ public class MobTierAssignmentHandler {
     }
     
     /**
-
-                // If mob spawned with a bow/crossbow, optionally give configured arrows.
-                if (weapon.getItem() instanceof ProjectileWeaponItem) {
-                    ItemStack arrows = GANCityMod.getConfiguredArrowStackForMob(mobTypeId);
-                    if (!arrows.isEmpty() && mob.getItemBySlot(EquipmentSlot.OFFHAND).isEmpty()) {
-                        mob.setItemSlot(EquipmentSlot.OFFHAND, arrows);
-                    }
-                }
      * Check if mob type is supported by adaptive AI
      * Now supports ALL hostile mobs, with compatibility checks for other mods
      */
@@ -233,6 +220,11 @@ public class MobTierAssignmentHandler {
             String mobTypeId = getMobTypeId(mob);
             ItemStack weapon = PlayerMobLoadoutStore.chooseWeaponFor(nearest, mobTypeId, RANDOM);
 
+            // If no per-player override, fall back to global config per-mob loadouts.
+            if (weapon == null) {
+                weapon = GANCityMod.chooseConfiguredWeaponForMob(mobTypeId, RANDOM);
+            }
+
             // null => no override, use default random behavior.
             // EMPTY => explicitly unarmed.
             if (weapon == null) {
@@ -242,6 +234,14 @@ public class MobTierAssignmentHandler {
                 mob.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
             } else {
                 mob.setItemSlot(EquipmentSlot.MAINHAND, weapon);
+            }
+
+            // If mob spawned with a bow/crossbow, optionally give configured arrows.
+            if (weapon != null && !weapon.isEmpty() && weapon.getItem() instanceof ProjectileWeaponItem) {
+                ItemStack arrows = GANCityMod.getConfiguredArrowStackForMob(mobTypeId);
+                if (!arrows.isEmpty() && mob.getItemBySlot(EquipmentSlot.OFFHAND).isEmpty()) {
+                    mob.setItemSlot(EquipmentSlot.OFFHAND, arrows);
+                }
             }
 
             // Mark as applied (persistent)
@@ -277,7 +277,7 @@ public class MobTierAssignmentHandler {
 
     private static String getMobTypeId(Mob mob) {
         try {
-            ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType());
+            ResourceLocation key = ForgeRegistries.ENTITY_TYPES.getKey(mob.getType());
             if (key != null) {
                 return key.toString();
             }

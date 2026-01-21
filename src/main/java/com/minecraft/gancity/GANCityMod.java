@@ -8,7 +8,6 @@ import com.minecraft.gancity.compat.ModCompatibility;
 import com.minecraft.gancity.config.PlayerMobLoadoutStore;
 import com.minecraft.gancity.mca.MCAIntegration;
 import com.mojang.logging.LogUtils;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -31,6 +30,7 @@ import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.config.ModConfigEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.registries.ForgeRegistries;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -128,7 +128,9 @@ public class GANCityMod {
         private static void registerConfigScreen() {
             ModLoadingContext.get().registerExtensionPoint(
                 ConfigScreenHandler.ConfigScreenFactory.class,
-                () -> (mc, parent) -> new AdaptiveMobAiLoadoutConfigScreen(parent)
+                () -> new ConfigScreenHandler.ConfigScreenFactory(
+                    (mc, parent) -> new AdaptiveMobAiLoadoutConfigScreen(parent)
+                )
             );
         }
     }
@@ -238,7 +240,7 @@ public class GANCityMod {
         if (id == null) {
             return null;
         }
-        Item item = BuiltInRegistries.ITEM.get(id);
+        Item item = ForgeRegistries.ITEMS.getValue(id);
         if (item == null || item == Items.AIR) {
             return null;
         }
@@ -266,7 +268,7 @@ public class GANCityMod {
             return ItemStack.EMPTY;
         }
 
-        Item item = BuiltInRegistries.ITEM.get(id);
+        Item item = ForgeRegistries.ITEMS.getValue(id);
         if (item == null || item == Items.AIR) {
             return ItemStack.EMPTY;
         }

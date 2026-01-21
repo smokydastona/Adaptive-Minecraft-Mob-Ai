@@ -8,16 +8,13 @@ import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.MobCategory;
 import net.minecraftforge.fml.loading.FMLPaths;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,9 +46,6 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
     private Button globalDefaultArrow;
     private Button mobArrowOverride;
 
-    private Button saveButton;
-    private Button cancelButton;
-
     private List<String> allMobIds = List.of();
     private List<String> allItemIds = List.of();
 
@@ -81,11 +75,11 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
         addRenderableWidget(mobSearch);
 
         mobList = new MobList(this.minecraft, leftWidth, this.height - 70, 36, this.height - 58, 18);
+        mobList.setLeftPos(10);
         addRenderableWidget(mobList);
 
         int rowY = 42;
         int rowH = 22;
-        int labelW = 120;
         int fieldW = Math.min(300, this.width - rightX - 12);
 
         weapon1 = addRenderableWidget(Button.builder(Component.literal("Weapon 1: (empty)"), b -> pickWeapon(0)).bounds(rightX, rowY, fieldW, rowH).build());
@@ -98,11 +92,11 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
         globalDefaultArrow = addRenderableWidget(Button.builder(Component.literal("Default Arrow: minecraft:arrow"), b -> pickGlobalDefaultArrow()).bounds(rightX, bowsY, fieldW, rowH).build());
         mobArrowOverride = addRenderableWidget(Button.builder(Component.literal("Mob Arrow Override: (default)"), b -> pickMobArrowOverride()).bounds(rightX, bowsY + rowH + 6, fieldW, rowH).build());
 
-        saveButton = addRenderableWidget(Button.builder(Component.literal("Save"), b -> saveAndClose())
+        addRenderableWidget(Button.builder(Component.literal("Save"), b -> saveAndClose())
             .bounds(rightX, this.height - 34, 100, 20)
             .build());
 
-        cancelButton = addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onClose())
+        addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onClose())
             .bounds(rightX + 110, this.height - 34, 100, 20)
             .build());
 
@@ -362,7 +356,7 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
 
     private static List<String> buildMobIdList() {
         try {
-            return net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.keySet().stream()
+            return ForgeRegistries.ENTITY_TYPES.getKeys().stream()
                 .map(ResourceLocation::toString)
                 .sorted()
                 .collect(Collectors.toList());
@@ -373,7 +367,7 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
 
     private static List<String> buildItemIdList() {
         try {
-            return net.minecraft.core.registries.BuiltInRegistries.ITEM.keySet().stream()
+            return ForgeRegistries.ITEMS.getKeys().stream()
                 .map(ResourceLocation::toString)
                 .sorted()
                 .collect(Collectors.toList());

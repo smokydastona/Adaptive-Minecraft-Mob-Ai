@@ -4,13 +4,13 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.minecraft.gancity.GANCityMod;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.fml.loading.FMLPaths;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -420,21 +420,6 @@ public final class PlayerMobLoadoutStore {
         return list == null ? java.util.Collections.emptyList() : list;
     }
 
-    private static ItemStack pickOne(List<String> ids, Random random) {
-        if (ids == null || ids.isEmpty()) {
-            return null;
-        }
-
-        // Try a few times in case entries are invalid.
-        for (int i = 0; i < Math.min(ids.size(), 8); i++) {
-            String id = ids.get(random.nextInt(ids.size()));
-            Item item = resolveItem(id);
-            if (item != null) {
-                return new ItemStack(item);
-            }
-        }
-        return null;
-    }
 
     private static void migrateLegacyListsIfPresent(PlayerLoadout loadout) {
         if (loadout == null) {
@@ -541,7 +526,7 @@ public final class PlayerMobLoadoutStore {
         }
 
         try {
-            Item item = BuiltInRegistries.ITEM.get(rl);
+            Item item = ForgeRegistries.ITEMS.getValue(rl);
             if (item == null || item == Items.AIR) {
                 return null;
             }
