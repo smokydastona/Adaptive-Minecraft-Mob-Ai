@@ -40,6 +40,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 @Mod(GANCityMod.MODID)
 @Mod.EventBusSubscriber(modid = GANCityMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.DEDICATED_SERVER)
@@ -274,6 +276,138 @@ public class GANCityMod {
         }
 
         return new ItemStack(item, 64);
+    }
+
+    /**
+     * Reload only the loadout-related config keys from the TOML on disk and apply them immediately.
+     *
+     * This exists because our custom in-game UI writes the TOML directly; Forge's config system
+     * won't always re-broadcast a reload event while the game is running.
+     */
+    public static void reloadLoadoutsFromDisk() {
+        // Ensure baseline config is loaded so we don't later overwrite these values.
+        loadConfigIfNeeded();
+
+        try {
+            Path configPath = net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get().resolve(CONFIG_FILE_NAME);
+            if (!Files.exists(configPath)) {
+                return;
+            }
+
+            Map<String, String> kv = parseTomlKeyValues(configPath);
+            globalMobWeaponLoadouts = parseMobWeaponLoadouts(parseTomlStringListValue(kv.get("mobWeaponLoadouts")), 5);
+            defaultBowArrowItemId = normalizeItemId(stripQuotes(kv.getOrDefault("defaultBowArrowItem", "\"minecraft:arrow\"")), "minecraft:arrow", true);
+            bowArrowOverrides = parseKeyValueMap(parseTomlStringListValue(kv.get("mobBowArrowOverrides")));
+
+            // Also update the ForgeConfigSpec values (so a later applyForgeConfig() stays consistent)
+            List<String> weaponEntries = globalMobWeaponLoadouts.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(e -> e.getKey() + "=" + String.join(",", e.getValue()))
+                .toList();
+            COMMON.mobWeaponLoadouts.set(weaponEntries);
+            COMMON.defaultBowArrowItem.set(defaultBowArrowItemId);
+            List<String> arrowEntries = bowArrowOverrides.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(e -> e.getKey() + "=" + e.getValue())
+                .toList();
+            COMMON.mobBowArrowOverrides.set(arrowEntries);
+        } catch (Exception e) {
+            LOGGER.warn("Failed to reload loadouts from disk: {}", e.toString());
+        }
+    }
+
+    private static Map<String, String> parseTomlKeyValues(Path path) throws java.io.IOException {
+        List<String> lines = Files.readAllLines(path);
+        Map<String, String> kv = new HashMap<>();
+        for (String rawLine : lines) {
+            String line = rawLine;
+            int hashIdx = line.indexOf('#');
+            if (hashIdx >= 0) {
+                line = line.substring(0, hashIdx);
+            }
+            line = line.trim();
+            if (line.isEmpty() || line.startsWith("[")) {
+                continue;
+            }
+            int eqIdx = line.indexOf('=');
+            if (eqIdx <= 0) {
+                continue;
+            }
+            String key = line.substring(0, eqIdx).trim();
+            String value = line.substring(eqIdx + 1).trim();
+            kv.put(key, value);
+        }
+        return kv;
+    }
+
+    private static List<String> parseTomlStringListValue(String raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        String v = raw.trim();
+        if (v.isEmpty()) {
+            return List.of();
+        }
+        if (!v.startsWith("[") || !v.endsWith("]")) {
+            String single = stripQuotes(v).trim();
+            return single.isEmpty() ? List.of() : List.of(single);
+        }
+
+        String inner = v.substring(1, v.length() - 1).trim();
+        if (inner.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> out = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+        char quoteChar = 0;
+        for (int i = 0; i < inner.length(); i++) {
+            char c = inner.charAt(i);
+            if (inQuotes) {
+                if (c == quoteChar) {
+                    inQuotes = false;
+                } else {
+                    current.append(c);
+                }
+                continue;
+            }
+
+            if (c == '"' || c == '\'') {
+                inQuotes = true;
+                quoteChar = c;
+                continue;
+            }
+
+            if (c == ',') {
+                String token = stripQuotes(current.toString()).trim();
+                if (!token.isEmpty()) {
+                    out.add(token);
+                }
+                current.setLength(0);
+                continue;
+            }
+
+            current.append(c);
+        }
+
+        String token = stripQuotes(current.toString()).trim();
+        if (!token.isEmpty()) {
+            out.add(token);
+        }
+
+        return out;
+    }
+
+    private static String stripQuotes(String value) {
+        if (value == null) {
+            return "";
+        }
+        String v = value.trim();
+        if ((v.startsWith("\"") && v.endsWith("\"")) || (v.startsWith("'") && v.endsWith("'"))) {
+            return v.substring(1, v.length() - 1);
+        }
+        return v;
     }
 
     private static Map<String, List<String>> parseMobWeaponLoadouts(List<? extends String> rawEntries, int maxWeaponsPerMob) {
