@@ -2,6 +2,7 @@ package com.minecraft.gancity;
 
 import com.minecraft.gancity.ai.MobBehaviorAI;
 import com.minecraft.gancity.ai.VillagerDialogueAI;
+import com.minecraft.gancity.client.config.AdaptiveMobAiLoadoutConfigScreen;
 import com.minecraft.gancity.command.GANCityCommand;
 import com.minecraft.gancity.compat.ModCompatibility;
 import com.minecraft.gancity.config.PlayerMobLoadoutStore;
@@ -19,6 +20,8 @@ import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.ConfigScreenHandler;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -113,9 +116,21 @@ public class GANCityMod {
         // Register Forge config so it shows up in the Mods menu
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, COMMON_SPEC, CONFIG_FILE_NAME);
 
+        // Custom client config UI (searchable selectors / "dropdown"-style pickers)
+        DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> ClientOnly::registerConfigScreen);
+
         MinecraftForge.EVENT_BUS.register(this);
         System.out.println("=== MCA AI Enhanced: Constructor FINISH ===");
         LOGGER.info("=== MCA AI Enhanced: Constructor FINISH ===");
+    }
+
+    private static final class ClientOnly {
+        private static void registerConfigScreen() {
+            ModLoadingContext.get().registerExtensionPoint(
+                ConfigScreenHandler.ConfigScreenFactory.class,
+                () -> (mc, parent) -> new AdaptiveMobAiLoadoutConfigScreen(parent)
+            );
+        }
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
