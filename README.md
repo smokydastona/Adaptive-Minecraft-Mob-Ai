@@ -102,6 +102,14 @@ maxActiveMobs = 100  # Reduce if server struggles
 cacheLifetimeTicks = 10  # AI decision cache duration
 ```
 
+### Modded Mob Tactics (Optional)
+
+If you use mods that add new mobs, Adaptive Mob AI can map those modded entity types (e.g. `some_mod:bear`) to an existing vanilla tactic profile (e.g. `polar_bear`) so they get appropriate tactics.
+
+- Config UI: Mods list → Config → **Modded Mob Tactics**
+- Persisted mapping file: `config/adaptivemobai-modded-mob-tactics.json`
+- Supports per-entity overrides and auto-assignment with hostile/passive fallbacks
+
 ---
 
 ## 📊 Performance
