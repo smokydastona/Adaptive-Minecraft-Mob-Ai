@@ -2,10 +2,11 @@ package com.minecraft.gancity;
 
 import com.minecraft.gancity.ai.MobBehaviorAI;
 import com.minecraft.gancity.ai.VillagerDialogueAI;
-import com.minecraft.gancity.client.config.AdaptiveMobAiLoadoutConfigScreen;
+import com.minecraft.gancity.client.config.AdaptiveMobAiConfigScreen;
 import com.minecraft.gancity.command.GANCityCommand;
 import com.minecraft.gancity.compat.ModCompatibility;
 import com.minecraft.gancity.config.PlayerMobLoadoutStore;
+import com.minecraft.gancity.config.ModdedMobTacticMappingStore;
 import com.minecraft.gancity.mca.MCAIntegration;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
@@ -131,7 +132,7 @@ public class GANCityMod {
             ModLoadingContext.get().registerExtensionPoint(
                 ConfigScreenHandler.ConfigScreenFactory.class,
                 () -> new ConfigScreenHandler.ConfigScreenFactory(
-                    (mc, parent) -> new AdaptiveMobAiLoadoutConfigScreen(parent)
+                    (mc, parent) -> new AdaptiveMobAiConfigScreen(parent)
                 )
             );
         }
@@ -177,8 +178,9 @@ public class GANCityMod {
     private static void ensureDefaultConfigFilesExist() {
         try {
             // The Forge config system will create the TOML automatically.
-            // We only need to ensure our JSON file exists.
+            // We only need to ensure our JSON files exist.
             PlayerMobLoadoutStore.ensureFileExists();
+            ModdedMobTacticMappingStore.ensureFileExists();
         } catch (Exception e) {
             LOGGER.warn("Failed to ensure default config files exist: {}", e.toString());
         }

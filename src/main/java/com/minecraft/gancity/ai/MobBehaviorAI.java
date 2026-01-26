@@ -1,10 +1,26 @@
 package com.minecraft.gancity.ai;
 
 import com.minecraft.gancity.GANCityMod;
+import com.minecraft.gancity.config.ModdedMobTacticMappingStore;
 
 import com.minecraft.gancity.event.MobTierAssignmentHandler;
 import com.minecraft.gancity.ml.*;
 import com.mojang.logging.LogUtils;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.entity.monster.AbstractSkeleton;
+import net.minecraft.world.entity.monster.Blaze;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.monster.Ghast;
+import net.minecraft.world.entity.monster.MagmaCube;
+import net.minecraft.world.entity.monster.Slime;
+import net.minecraft.world.entity.monster.Spider;
+import net.minecraft.world.entity.monster.Witch;
+import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.world.entity.animal.IronGolem;
+import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.player.Player;
 import org.slf4j.Logger;
 
@@ -15,7 +31,7 @@ import java.util.*;
  * Combines Double DQN, Prioritized Replay, Multi-Agent, Curriculum Learning, 
  * Visual Perception, and Genetic Evolution for adaptive gameplay
  */
-@SuppressWarnings({"null", "unused"})
+@SuppressWarnings({"null", "unused", "deprecation"})
 public class MobBehaviorAI {
     private static final Logger LOGGER = LogUtils.getLogger();
     
@@ -80,6 +96,12 @@ public class MobBehaviorAI {
     private static final long RETRY_BACKOFF_MULTIPLIER = 2;  // Exponential backoff (1m, 2m, 4m, 8m, 16m)
     
     private final Map<String, MobBehaviorProfile> behaviorProfiles = new HashMap<>();
+
+    /**
+     * Subset of {@link #behaviorProfiles} keys that correspond to vanilla entity ids.
+     * Used for name-based auto-mapping of modded mobs.
+     */
+    private volatile Set<String> vanillaEntityProfileKeys = Set.of();
     private final Map<String, MobState> lastStateCache = new HashMap<>();
     private final Map<String, String> lastActionCache = new HashMap<>();
     private final Map<String, VisualPerception.VisualState> lastVisualCache = new HashMap<>();
@@ -118,6 +140,258 @@ public class MobBehaviorAI {
     private final Map<String, CombatEpisode> activeEpisodes = new HashMap<>();  // Track ongoing combat
     private boolean tacticalSystemEnabled = true;
     private int episodeSampleInterval = 10;  // Sample tactical state every 10 ticks (0.5s)
+
+    /**
+     * Exposes all known tactic profile keys (vanilla + special profiles like villager guards).
+     * Used by config UI.
+     */
+    public List<String> getAvailableProfileKeys() {
+        List<String> keys = new ArrayList<>(behaviorProfiles.keySet());
+        keys.sort(String::compareTo);
+        return keys;
+    }
+
+    private void rebuildVanillaProfileKeyIndex() {
+        Set<String> keys = new HashSet<>();
+        for (String k : behaviorProfiles.keySet()) {
+            if (k == null || k.isBlank()) {
+                continue;
+            }
+            try {
+                ResourceLocation rl = ResourceLocation.tryParse("minecraft:" + k.toLowerCase(Locale.ROOT));
+                if (rl != null && BuiltInRegistries.ENTITY_TYPE.containsKey(rl)) {
+                    keys.add(k.toLowerCase(Locale.ROOT));
+                }
+            } catch (Exception ignored) {
+                // Ignore invalid keys
+            }
+        }
+        vanillaEntityProfileKeys = Collections.unmodifiableSet(keys);
+    }
+
+    private String normalizeMobTypeForProfile(String mobType, net.minecraft.world.entity.Mob mobEntity) {
+        if (mobType == null) {
+            return fallbackProfileForMob(mobEntity);
+        }
+
+        String raw = mobType.trim().toLowerCase(Locale.ROOT);
+        if (raw.isEmpty()) {
+            return fallbackProfileForMob(mobEntity);
+        }
+
+        // Already a known profile key (includes special keys like aggressive_guard)
+        if (behaviorProfiles.containsKey(raw)) {
+            return raw;
+        }
+
+        // Try to interpret as entity type id (namespace:path)
+        ResourceLocation rl = ResourceLocation.tryParse(raw);
+        if (rl == null) {
+            // Back-compat: sometimes callers pass a display-name or class-name.
+            // If we can't parse it, keep the original behavior (will likely fall back).
+            return behaviorProfiles.containsKey(raw) ? raw : fallbackProfileForMob(mobEntity);
+        }
+
+        // Vanilla ids map directly to their profile keys (path)
+        if ("minecraft".equals(rl.getNamespace())) {
+            String path = rl.getPath();
+            if (behaviorProfiles.containsKey(path)) {
+                return path;
+            }
+            return fallbackProfileForMob(mobEntity);
+        }
+
+        // Modded entity: apply override/auto mapping if enabled
+        ModdedMobTacticMappingStore.Config cfg = ModdedMobTacticMappingStore.get();
+        if (cfg == null || !cfg.enabled) {
+            return fallbackProfileForMob(mobEntity);
+        }
+
+        Optional<String> override = ModdedMobTacticMappingStore.getOverride(rl.toString());
+        if (override.isPresent() && behaviorProfiles.containsKey(override.get())) {
+            return override.get();
+        }
+
+        Optional<String> nsDefault = ModdedMobTacticMappingStore.getNamespaceDefault(rl.getNamespace());
+        if (nsDefault.isPresent() && behaviorProfiles.containsKey(nsDefault.get())) {
+            return nsDefault.get();
+        }
+
+        if (!cfg.autoAssignEnabled) {
+            return fallbackProfileForMob(mobEntity);
+        }
+
+        String byClass = mapByInheritanceHeuristic(mobEntity);
+        if (byClass != null && behaviorProfiles.containsKey(byClass)) {
+            return byClass;
+        }
+
+        String byName = mapByNameSimilarity(rl.getPath(), mobEntity);
+        if (byName != null && behaviorProfiles.containsKey(byName)) {
+            return byName;
+        }
+
+        return fallbackProfileForMob(mobEntity);
+    }
+
+    private String mapByInheritanceHeuristic(net.minecraft.world.entity.Mob mobEntity) {
+        if (mobEntity == null) {
+            return null;
+        }
+        // Common mod patterns: extend vanilla base classes
+        if (mobEntity instanceof Zombie) {
+            return "zombie";
+        }
+        if (mobEntity instanceof AbstractSkeleton) {
+            return "skeleton";
+        }
+        if (mobEntity instanceof Creeper) {
+            return "creeper";
+        }
+        if (mobEntity instanceof Spider) {
+            return "spider";
+        }
+        if (mobEntity instanceof EnderMan) {
+            return "enderman";
+        }
+        if (mobEntity instanceof Slime) {
+            return "slime";
+        }
+        if (mobEntity instanceof MagmaCube) {
+            return "magma_cube";
+        }
+        if (mobEntity instanceof Witch) {
+            return "witch";
+        }
+        if (mobEntity instanceof Blaze) {
+            return "blaze";
+        }
+        if (mobEntity instanceof Ghast) {
+            return "ghast";
+        }
+        if (mobEntity instanceof Villager) {
+            return "villager";
+        }
+        if (mobEntity instanceof IronGolem) {
+            return "iron_golem";
+        }
+        return null;
+    }
+
+    private String mapByNameSimilarity(String moddedPath, net.minecraft.world.entity.Mob mobEntity) {
+        if (moddedPath == null || moddedPath.isBlank() || vanillaEntityProfileKeys.isEmpty()) {
+            return null;
+        }
+
+        MobCategory category = null;
+        try {
+            if (mobEntity != null) {
+                category = mobEntity.getType().getCategory();
+            }
+        } catch (Exception ignored) {
+            // Ignore category failures
+        }
+
+        String path = moddedPath.toLowerCase(Locale.ROOT);
+        int bestScore = Integer.MIN_VALUE;
+        String best = null;
+
+        for (String candidate : vanillaEntityProfileKeys) {
+            if (category != null) {
+                try {
+                    ResourceLocation vanillaId = ResourceLocation.tryParse("minecraft:" + candidate);
+                    if (vanillaId != null) {
+                        MobCategory candCategory = BuiltInRegistries.ENTITY_TYPE.get(vanillaId).getCategory();
+                        if (candCategory != category) {
+                            continue;
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // Ignore category mismatch checks if anything is weird
+                }
+            }
+
+            int score = simpleSimilarityScore(path, candidate);
+            if (score > bestScore) {
+                bestScore = score;
+                best = candidate;
+            }
+        }
+
+        return best;
+    }
+
+    private static int simpleSimilarityScore(String a, String b) {
+        int tokenOverlap = tokenOverlapScore(a, b);
+        int dist = levenshtein(a, b);
+        return tokenOverlap * 100 - dist * 2;
+    }
+
+    private static int tokenOverlapScore(String a, String b) {
+        Set<String> at = splitTokens(a);
+        Set<String> bt = splitTokens(b);
+        int overlap = 0;
+        for (String t : at) {
+            if (bt.contains(t)) {
+                overlap++;
+            }
+        }
+        return overlap;
+    }
+
+    private static Set<String> splitTokens(String s) {
+        if (s == null) {
+            return Set.of();
+        }
+        return Arrays.stream(s.split("[_\\-]"))
+            .map(String::trim)
+            .filter(t -> !t.isEmpty())
+            .collect(java.util.stream.Collectors.toSet());
+    }
+
+    private static int levenshtein(String s1, String s2) {
+        if (s1 == null || s2 == null) {
+            return Integer.MAX_VALUE;
+        }
+        int len1 = s1.length();
+        int len2 = s2.length();
+
+        int[] prev = new int[len2 + 1];
+        int[] cur = new int[len2 + 1];
+        for (int j = 0; j <= len2; j++) {
+            prev[j] = j;
+        }
+        for (int i = 1; i <= len1; i++) {
+            cur[0] = i;
+            char c1 = s1.charAt(i - 1);
+            for (int j = 1; j <= len2; j++) {
+                int cost = (c1 == s2.charAt(j - 1)) ? 0 : 1;
+                cur[j] = Math.min(Math.min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+            }
+            int[] tmp = prev;
+            prev = cur;
+            cur = tmp;
+        }
+        return prev[len2];
+    }
+
+    private String fallbackProfileForMob(net.minecraft.world.entity.Mob mobEntity) {
+        ModdedMobTacticMappingStore.Config cfg = ModdedMobTacticMappingStore.get();
+        String hostile = cfg != null ? cfg.defaultHostileProfile : "zombie";
+        String passive = cfg != null ? cfg.defaultPassiveProfile : "cow";
+
+        if (mobEntity != null) {
+            try {
+                if (mobEntity.getType().getCategory() == MobCategory.MONSTER) {
+                    return behaviorProfiles.containsKey(hostile) ? hostile : "zombie";
+                }
+            } catch (Exception ignored) {
+                // ignore
+            }
+        }
+
+        return behaviorProfiles.containsKey(passive) ? passive : "cow";
+    }
     private final Map<String, Integer> episodeTickCounters = new HashMap<>();  // Track when to sample
     
     // Variant family grouping (cross-learning within families)
@@ -1083,6 +1357,7 @@ public class MobBehaviorAI {
             0.7f
         ));
         
+        rebuildVanillaProfileKeyIndex();
         LOGGER.info("Initialized behavior profiles for {} mob types (ALL vanilla Minecraft mobs covered)", behaviorProfiles.size());
     }
 
@@ -1101,7 +1376,9 @@ public class MobBehaviorAI {
         // CRITICAL FIX #5: Limit action frequency - don't think every tick
         // Use dynamic think interval based on mob type and tier
         globalTick++;
-        int thinkInterval = tierSystemEnabled ? getThinkInterval(mobType) : THINK_INTERVAL;
+        String normalizedMobType = normalizeMobTypeForProfile(mobType, null);
+        mobType = normalizedMobType;
+        int thinkInterval = tierSystemEnabled ? getThinkInterval(normalizedMobType) : THINK_INTERVAL;
         
         Integer lastThink = mobLastThinkTick.get(mobId);
         if (lastThink != null && (globalTick - lastThink) < thinkInterval) {
@@ -1116,7 +1393,7 @@ public class MobBehaviorAI {
             performanceOptimizer.tick();
         }
         
-        MobBehaviorProfile profile = behaviorProfiles.get(mobType.toLowerCase());
+        MobBehaviorProfile profile = behaviorProfiles.get(normalizedMobType.toLowerCase(Locale.ROOT));
         
         if (profile == null) {
             return "default_attack";
@@ -1208,6 +1485,8 @@ public class MobBehaviorAI {
      * @return Selected action
      */
     public String selectMobActionWithEntity(String mobType, MobState state, String mobId, net.minecraft.world.entity.Mob mobEntity) {
+        String normalizedMobType = normalizeMobTypeForProfile(mobType, mobEntity);
+
         // Get mob's tactic tier for difficulty adjustment
         TacticTier tier = TacticTier.VETERAN; // default
         if (mobEntity != null && MobTierAssignmentHandler.hasTier(mobEntity)) {
@@ -1224,7 +1503,7 @@ public class MobBehaviorAI {
             difficultyMultiplier = contextDifficulty * tierDifficulty;
             
             // Select action with modified difficulty
-            String action = selectMobAction(mobType, state, mobId, (net.minecraft.world.entity.player.Player) null);
+            String action = selectMobAction(normalizedMobType, state, mobId, (net.minecraft.world.entity.player.Player) null);
             
             // Restore original difficulty
             difficultyMultiplier = originalDifficulty;
@@ -1234,7 +1513,7 @@ public class MobBehaviorAI {
         // Apply only tier difficulty
         float originalDifficulty = difficultyMultiplier;
         difficultyMultiplier *= tier.getDifficultyMultiplier();
-        String action = selectMobAction(mobType, state, mobId, (net.minecraft.world.entity.player.Player) null);
+        String action = selectMobAction(normalizedMobType, state, mobId, (net.minecraft.world.entity.player.Player) null);
         difficultyMultiplier = originalDifficulty;
         
         return action;

@@ -11,6 +11,7 @@ import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -29,7 +30,7 @@ import java.util.EnumSet;
  * - Ice and Fire: Skips dragons and mythical creatures (complex custom AI)
  */
 @Mixin(Mob.class)
-@SuppressWarnings({"null", "unused"})
+@SuppressWarnings({"null", "unused", "deprecation"})
 public abstract class MobAIEnhancementMixin {
 
     static {
@@ -281,7 +282,7 @@ public abstract class MobAIEnhancementMixin {
                     startSeqMethod.invoke(behaviorAI, mobId);
                     
                     // Start tactical episode tracking (NEW SYSTEM)
-                    String mobType = mob.getType().getDescription().getString().toLowerCase();
+                    String mobType = BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString();
                     java.lang.reflect.Method startEpisodeMethod = behaviorAI.getClass().getMethod("startCombatEpisode", String.class, String.class, int.class);
                     startEpisodeMethod.invoke(behaviorAI, mobId, mobType, mob.tickCount);
                 } catch (Exception e) {
@@ -300,7 +301,7 @@ public abstract class MobAIEnhancementMixin {
                 
                 try {
                     // End sequence tracking and submit to Cloudflare (old system)
-                    String mobType = mob.getType().getDescription().getString().toLowerCase();
+                    String mobType = BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString();
                     String outcome = determineOutcome();
                     java.lang.reflect.Method endSeqMethod = behaviorAI.getClass().getMethod("endCombatSequence", String.class, String.class, String.class);
                     endSeqMethod.invoke(behaviorAI, mobId, mobType, outcome);
@@ -447,8 +448,8 @@ public abstract class MobAIEnhancementMixin {
                     // Villagers (MCA or vanilla) use their permanent tactical profile
                     mobType = persistentProfile;
                 } else {
-                    // Regular mobs use class-based type
-                    mobType = mob.getClass().getSimpleName().toLowerCase();
+                    // Regular mobs use the registry entity type id (stable across mods)
+                    mobType = BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString();
                 }
                 
                 // AI selects action with contextual difficulty (pass mob entity for environmental context)
