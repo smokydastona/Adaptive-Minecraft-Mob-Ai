@@ -7,6 +7,7 @@ import com.minecraft.gancity.command.GANCityCommand;
 import com.minecraft.gancity.compat.ModCompatibility;
 import com.minecraft.gancity.config.PlayerMobLoadoutStore;
 import com.minecraft.gancity.config.ModdedMobTacticMappingStore;
+import com.minecraft.gancity.config.PerMobAiDefaultsStore;
 import com.minecraft.gancity.mca.MCAIntegration;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
@@ -181,6 +182,7 @@ public class GANCityMod {
             // We only need to ensure our JSON files exist.
             PlayerMobLoadoutStore.ensureFileExists();
             ModdedMobTacticMappingStore.ensureFileExists();
+            PerMobAiDefaultsStore.ensureFileExists();
         } catch (Exception e) {
             LOGGER.warn("Failed to ensure default config files exist: {}", e.toString());
         }

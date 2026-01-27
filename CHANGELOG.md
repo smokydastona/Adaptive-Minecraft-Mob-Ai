@@ -2,6 +2,12 @@
 
 All notable changes to Adaptive Mob AI will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- Per-mob AI overrides: new config UI page to force specific entities (vanilla or modded) to keep default/vanilla AI (skips goal injection)
+  - Persisted in `config/adaptivemobai-per-mob-ai.json`
+
 ## [1.1.194]
 
 ### Fixed

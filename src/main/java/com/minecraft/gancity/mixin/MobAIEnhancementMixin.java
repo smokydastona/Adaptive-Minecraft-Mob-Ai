@@ -1,5 +1,6 @@
 package com.minecraft.gancity.mixin;
 
+import com.minecraft.gancity.config.PerMobAiDefaultsStore;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -102,14 +103,26 @@ public abstract class MobAIEnhancementMixin {
         try {
             Mob mob = (Mob)(Object)this;
 
+            String entityTypeId = null;
+            try {
+                entityTypeId = BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString();
+            } catch (Throwable ignored) {
+                // If we can't resolve a stable id, fall back to applying enhancements.
+            }
+
             // NOTE: Some features (like universal ranged-weapon usage) should work even if
             // MobBehaviorAI/ML is disabled or failed to initialize. Only the ML-driven melee
             // enhancements are gated behind behaviorAI != null.
             Object behaviorAI = tryGetMobBehaviorAI();
+
+            // Per-mob override: allow forcing default/vanilla AI for specific entities.
+            if (entityTypeId != null && !PerMobAiDefaultsStore.isAiEnabledFor(entityTypeId)) {
+                return;
+            }
             
             // Ice and Fire compatibility - skip their mobs entirely
             if (isIceAndFireLoaded()) {
-                String entityId = mob.getType().toString();
+                String entityId = entityTypeId != null ? entityTypeId : mob.getType().toString();
                 if (entityId.contains("iceandfire:")) {
                     return; // Don't modify Ice and Fire entity AI
                 }

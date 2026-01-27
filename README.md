@@ -110,6 +110,14 @@ If you use mods that add new mobs, Adaptive Mob AI can map those modded entity t
 - Persisted mapping file: `config/adaptivemobai-modded-mob-tactics.json`
 - Supports per-entity overrides and auto-assignment with hostile/passive fallbacks
 
+### Per Mob AI (Vanilla/Enhanced) (Optional)
+
+If you want certain mobs (vanilla or modded) to keep their default AI, you can disable Adaptive Mob AI injections per entity type.
+
+- Config UI: Mods list → Config → **Per Mob AI (Vanilla/Enhanced)**
+- Persisted override file: `config/adaptivemobai-per-mob-ai.json`
+- When set to **Vanilla**, this mod skips goal injection for that mob
+
 ---
 
 ## 📊 Performance
