@@ -192,6 +192,12 @@ public class MobBehaviorAI {
             return behaviorProfiles.containsKey(raw) ? raw : fallbackProfileForMob(mobEntity);
         }
 
+        // Explicit per-entity override: apply for BOTH vanilla and modded ids.
+        Optional<String> override = ModdedMobTacticMappingStore.getOverride(rl.toString());
+        if (override.isPresent() && behaviorProfiles.containsKey(override.get())) {
+            return override.get();
+        }
+
         // Vanilla ids map directly to their profile keys (path)
         if ("minecraft".equals(rl.getNamespace())) {
             String path = rl.getPath();
@@ -201,15 +207,10 @@ public class MobBehaviorAI {
             return fallbackProfileForMob(mobEntity);
         }
 
-        // Modded entity: apply override/auto mapping if enabled
+        // Modded entity: apply namespace defaults / auto mapping if enabled
         ModdedMobTacticMappingStore.Config cfg = ModdedMobTacticMappingStore.get();
         if (cfg == null || !cfg.enabled) {
             return fallbackProfileForMob(mobEntity);
-        }
-
-        Optional<String> override = ModdedMobTacticMappingStore.getOverride(rl.toString());
-        if (override.isPresent() && behaviorProfiles.containsKey(override.get())) {
-            return override.get();
         }
 
         Optional<String> nsDefault = ModdedMobTacticMappingStore.getNamespaceDefault(rl.getNamespace());

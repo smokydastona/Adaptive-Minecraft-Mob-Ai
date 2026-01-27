@@ -51,6 +51,8 @@ public final class AdaptiveMobAiModdedMobTacticsConfigScreen extends Screen {
     // Local editable copy (write on Save)
     private ModdedMobTacticMappingStore.Config working;
 
+    private boolean loadedFromDisk;
+
     private List<String> allEntityIds = List.of();
     private List<String> profileKeys = List.of();
     private final Map<String, String> suggestedCache = new HashMap<>();
@@ -62,12 +64,15 @@ public final class AdaptiveMobAiModdedMobTacticsConfigScreen extends Screen {
 
     @Override
     protected void init() {
-        // Load config once per screen open
-        ModdedMobTacticMappingStore.loadIfNeeded();
-        ModdedMobTacticMappingStore.Config cfg = ModdedMobTacticMappingStore.get();
-        working = deepCopy(cfg);
+        // Preserve in-memory changes when returning from selector screens.
+        if (!loadedFromDisk || working == null) {
+            ModdedMobTacticMappingStore.loadIfNeeded();
+            ModdedMobTacticMappingStore.Config cfg = ModdedMobTacticMappingStore.get();
+            working = deepCopy(cfg);
+            loadedFromDisk = true;
+        }
 
-        profileKeys = loadProfileKeyOptions();
+        profileKeys = profileKeys == null || profileKeys.isEmpty() ? loadProfileKeyOptions() : profileKeys;
         allEntityIds = buildEntityIdList(showVanilla);
 
         int leftWidth = Math.max(240, this.width / 3);
@@ -274,8 +279,8 @@ public final class AdaptiveMobAiModdedMobTacticsConfigScreen extends Screen {
                 } else {
                     working.defaultPassiveProfile = normalized;
                 }
-                // Re-init to refresh button text for defaults
-                this.init();
+                refreshRightPanel();
+                refreshList();
             }
         ));
     }

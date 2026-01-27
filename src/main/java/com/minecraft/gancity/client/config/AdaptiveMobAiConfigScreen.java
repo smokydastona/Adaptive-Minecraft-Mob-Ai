@@ -26,20 +26,16 @@ public final class AdaptiveMobAiConfigScreen extends Screen {
         int y = this.height / 4;
         int w = Math.min(260, this.width - 40);
 
-        addRenderableWidget(Button.builder(Component.literal("Mob Loadouts"), b ->
-            Minecraft.getInstance().setScreen(new AdaptiveMobAiLoadoutConfigScreen(this))
+        addRenderableWidget(Button.builder(Component.literal("Mob AI Settings"), b ->
+            Minecraft.getInstance().setScreen(new AdaptiveMobAiMobAiSettingsScreen(this))
         ).bounds(centerX - w / 2, y, w, 20).build());
 
-        addRenderableWidget(Button.builder(Component.literal("Modded Mob Tactics"), b ->
-            Minecraft.getInstance().setScreen(new AdaptiveMobAiModdedMobTacticsConfigScreen(this))
+        addRenderableWidget(Button.builder(Component.literal("Advanced Mob AI Settings"), b ->
+            Minecraft.getInstance().setScreen(new AdaptiveMobAiAdvancedMobAiSettingsScreen(this))
         ).bounds(centerX - w / 2, y + 24, w, 20).build());
 
-        addRenderableWidget(Button.builder(Component.literal("Per Mob AI (Vanilla/Enhanced)"), b ->
-            Minecraft.getInstance().setScreen(new AdaptiveMobAiPerMobAiConfigScreen(this))
-        ).bounds(centerX - w / 2, y + 48, w, 20).build());
-
         addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
-            .bounds(centerX - w / 2, y + 84, w, 20)
+            .bounds(centerX - w / 2, y + 60, w, 20)
             .build());
     }
 
