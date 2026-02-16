@@ -11,9 +11,13 @@ import com.minecraft.gancity.config.PerMobAiDefaultsStore;
 import com.minecraft.gancity.mca.MCAIntegration;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.phys.AABB;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -96,6 +100,29 @@ public class GANCityMod {
     // Global arrows for bow/crossbow weapons
     private static volatile String defaultBowArrowItemId = "minecraft:arrow";
     private static volatile Map<String, String> bowArrowOverrides = Map.of();
+
+    // =====================================================
+    // Infection / Hive-mind compatibility (configurable)
+    // =====================================================
+    private static volatile boolean infectionHiveMindEnabled = true;
+    private static volatile boolean infectionHiveMindNonInvasive = true;
+    private static volatile boolean infectionHiveMindPreserveEquipment = true;
+    private static volatile int infectionHiveMindRangeBlocks = 32;
+    private static volatile int infectionHiveMindCooldownTicks = 40;
+    private static volatile int infectionHiveMindMaxAllies = 6;
+    private static volatile boolean infectionHiveMindOnlyIfAllyHasNoTarget = true;
+
+    // Best-effort defaults (mod namespaces). Edit in config if your mod uses a different namespace.
+    private static volatile java.util.Set<String> infectionHiveMindNamespaces = java.util.Set.of(
+        "srparasites",
+        "sculkhorde",
+        "sculk_horde",
+        "spore",
+        "haloflood"
+    );
+    private static volatile java.util.Set<String> infectionHiveMindMobIds = java.util.Set.of();
+
+    private static final String INFECTION_HIVE_NEXT_BROADCAST_TICK_TAG = "adaptivemobai_infection_hive_next";
 
     private static final CommonConfig COMMON;
     private static final ForgeConfigSpec COMMON_SPEC;
@@ -215,6 +242,138 @@ public class GANCityMod {
         globalMobWeaponLoadouts = parseMobWeaponLoadouts(COMMON.mobWeaponLoadouts.get(), 5);
         defaultBowArrowItemId = normalizeItemId(COMMON.defaultBowArrowItem.get(), "minecraft:arrow", true);
         bowArrowOverrides = parseKeyValueMap(COMMON.mobBowArrowOverrides.get());
+
+        // Infection / hive mind compatibility
+        infectionHiveMindEnabled = COMMON.infectionHiveMindEnabled.get();
+        infectionHiveMindNonInvasive = COMMON.infectionHiveMindNonInvasive.get();
+        infectionHiveMindPreserveEquipment = COMMON.infectionHiveMindPreserveEquipment.get();
+        infectionHiveMindRangeBlocks = COMMON.infectionHiveMindRangeBlocks.get();
+        infectionHiveMindCooldownTicks = COMMON.infectionHiveMindCooldownTicks.get();
+        infectionHiveMindMaxAllies = COMMON.infectionHiveMindMaxAllies.get();
+        infectionHiveMindOnlyIfAllyHasNoTarget = COMMON.infectionHiveMindOnlyIfAllyHasNoTarget.get();
+
+        infectionHiveMindNamespaces = normalizeLowercaseSet(COMMON.infectionHiveMindMobNamespaces.get());
+        infectionHiveMindMobIds = normalizeLowercaseSet(COMMON.infectionHiveMindMobIds.get());
+    }
+
+    private static java.util.Set<String> normalizeLowercaseSet(List<? extends String> raw) {
+        if (raw == null || raw.isEmpty()) {
+            return java.util.Set.of();
+        }
+        java.util.Set<String> out = new java.util.HashSet<>();
+        for (String s : raw) {
+            if (s == null) {
+                continue;
+            }
+            String v = s.trim().toLowerCase(Locale.ROOT);
+            if (!v.isBlank()) {
+                out.add(v);
+            }
+        }
+        return java.util.Collections.unmodifiableSet(out);
+    }
+
+    public static boolean isInfectionHiveMindEnabled() {
+        loadConfigIfNeeded();
+        return infectionHiveMindEnabled;
+    }
+
+    public static boolean shouldInfectionHiveMindBeNonInvasive() {
+        loadConfigIfNeeded();
+        return infectionHiveMindEnabled && infectionHiveMindNonInvasive;
+    }
+
+    public static boolean shouldPreserveEquipmentForInfectionMobs(EntityType<?> entityType) {
+        loadConfigIfNeeded();
+        return infectionHiveMindEnabled && infectionHiveMindPreserveEquipment && isInfectionHiveMindMob(entityType);
+    }
+
+    public static boolean isInfectionHiveMindMob(EntityType<?> entityType) {
+        loadConfigIfNeeded();
+        if (!infectionHiveMindEnabled || entityType == null) {
+            return false;
+        }
+
+        ResourceLocation key;
+        try {
+            key = net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(entityType);
+        } catch (Throwable t) {
+            return false;
+        }
+        if (key == null) {
+            return false;
+        }
+
+        String id = key.toString().toLowerCase(Locale.ROOT);
+        if (!infectionHiveMindMobIds.isEmpty() && infectionHiveMindMobIds.contains(id)) {
+            return true;
+        }
+
+        String ns = key.getNamespace();
+        if (ns == null) {
+            return false;
+        }
+        ns = ns.toLowerCase(Locale.ROOT);
+        return !infectionHiveMindNamespaces.isEmpty() && infectionHiveMindNamespaces.contains(ns);
+    }
+
+    public static void tryInfectionHiveMindBroadcast(Mob caller) {
+        if (caller == null || !caller.isAlive()) {
+            return;
+        }
+        if (caller.level().isClientSide()) {
+            return;
+        }
+
+        loadConfigIfNeeded();
+        if (!infectionHiveMindEnabled) {
+            return;
+        }
+        if (!isInfectionHiveMindMob(caller.getType())) {
+            return;
+        }
+
+        LivingEntity target = caller.getTarget();
+        if (target == null || !target.isAlive()) {
+            return;
+        }
+
+        int cooldown = Math.max(1, infectionHiveMindCooldownTicks);
+        int nextAllowedTick = caller.getPersistentData().getInt(INFECTION_HIVE_NEXT_BROADCAST_TICK_TAG);
+        if (caller.tickCount < nextAllowedTick) {
+            return;
+        }
+        caller.getPersistentData().putInt(INFECTION_HIVE_NEXT_BROADCAST_TICK_TAG, caller.tickCount + cooldown);
+
+        int range = Math.max(1, infectionHiveMindRangeBlocks);
+        int maxAllies = Math.max(0, infectionHiveMindMaxAllies);
+        if (maxAllies <= 0) {
+            return;
+        }
+
+        AABB box = caller.getBoundingBox().inflate(range);
+        List<Mob> nearby = caller.level().getEntitiesOfClass(Mob.class, box, m -> {
+            if (m == null || m == caller || !m.isAlive()) {
+                return false;
+            }
+            return isInfectionHiveMindMob(m.getType());
+        });
+
+        int applied = 0;
+        for (Mob ally : nearby) {
+            if (applied >= maxAllies) {
+                break;
+            }
+            if (infectionHiveMindOnlyIfAllyHasNoTarget && ally.getTarget() != null && ally.getTarget().isAlive()) {
+                continue;
+            }
+            try {
+                ally.setTarget(target);
+                applied++;
+            } catch (Throwable ignored) {
+                // Never break gameplay for a compatibility feature.
+            }
+        }
     }
 
     public static PlayerMobLoadoutStore.WeaponDecision chooseConfiguredWeaponDecisionForMob(String mobTypeId, Random random) {
@@ -831,6 +990,16 @@ public class GANCityMod {
         final ForgeConfigSpec.ConfigValue<String> defaultBowArrowItem;
         final ForgeConfigSpec.ConfigValue<List<? extends String>> mobBowArrowOverrides;
 
+        final ForgeConfigSpec.BooleanValue infectionHiveMindEnabled;
+        final ForgeConfigSpec.BooleanValue infectionHiveMindNonInvasive;
+        final ForgeConfigSpec.BooleanValue infectionHiveMindPreserveEquipment;
+        final ForgeConfigSpec.IntValue infectionHiveMindRangeBlocks;
+        final ForgeConfigSpec.IntValue infectionHiveMindCooldownTicks;
+        final ForgeConfigSpec.IntValue infectionHiveMindMaxAllies;
+        final ForgeConfigSpec.BooleanValue infectionHiveMindOnlyIfAllyHasNoTarget;
+        final ForgeConfigSpec.ConfigValue<List<? extends String>> infectionHiveMindMobNamespaces;
+        final ForgeConfigSpec.ConfigValue<List<? extends String>> infectionHiveMindMobIds;
+
         CommonConfig(ForgeConfigSpec.Builder builder) {
             builder.push("general");
             safeMode = builder.comment("Disable all ML/AI features entirely (emergency fallback)")
@@ -898,6 +1067,65 @@ public class GANCityMod {
                 .defineListAllowEmpty("mobBowArrowOverrides", List.of(), o -> o instanceof String);
             builder.pop();
 
+            builder.pop();
+
+            builder.push("compatibility");
+            builder.push("infection_hive_mind");
+            infectionHiveMindEnabled = builder
+                .comment(
+                    "Compatibility for infection-style mods (hive mind feel).",
+                    "When enabled, infected mobs can share targets with nearby infected mobs.",
+                    "Also supports a non-invasive mode to avoid overriding those mods' custom AI/equipment.",
+                    "Configure which mobs count as 'infected' via namespaces or explicit entity ids."
+                )
+                .define("infectionHiveMindEnabled", true);
+
+            infectionHiveMindNonInvasive = builder
+                .comment("If true, do not inject ML melee goals / ranged-goal overrides for infected mobs; only add the hive-mind broadcaster goal.")
+                .define("infectionHiveMindNonInvasive", true);
+
+            infectionHiveMindPreserveEquipment = builder
+                .comment("If true, do not assign random weapons/arrows for infected mobs (lets the infection mod control loadouts/NBT).")
+                .define("infectionHiveMindPreserveEquipment", true);
+
+            infectionHiveMindRangeBlocks = builder
+                .comment("How far (in blocks) an infected mob can broadcast its target to allies.")
+                .defineInRange("infectionHiveMindRangeBlocks", 32, 4, 128);
+
+            infectionHiveMindCooldownTicks = builder
+                .comment("Broadcast cooldown in ticks (20 ticks = 1 second).")
+                .defineInRange("infectionHiveMindCooldownTicks", 40, 1, 200);
+
+            infectionHiveMindMaxAllies = builder
+                .comment("Maximum number of nearby infected mobs to update per broadcast.")
+                .defineInRange("infectionHiveMindMaxAllies", 6, 0, 64);
+
+            infectionHiveMindOnlyIfAllyHasNoTarget = builder
+                .comment("If true, only set an ally's target if it currently has no target.")
+                .define("infectionHiveMindOnlyIfAllyHasNoTarget", true);
+
+            infectionHiveMindMobNamespaces = builder
+                .comment(
+                    "List of mod namespaces whose mobs should be treated as infected.",
+                    "Example: [\"srparasites\", \"sculkhorde\"]",
+                    "Best-effort defaults may not match every modpack; edit as needed."
+                )
+                .defineListAllowEmpty("infectionHiveMindMobNamespaces", List.of(
+                    "srparasites",
+                    "sculkhorde",
+                    "sculk_horde",
+                    "spore",
+                    "haloflood"
+                ), o -> o instanceof String);
+
+            infectionHiveMindMobIds = builder
+                .comment(
+                    "Optional: explicit entity type ids to treat as infected (higher priority than namespace).",
+                    "Example: [\"some_mod:infected_zombie\"]"
+                )
+                .defineListAllowEmpty("infectionHiveMindMobIds", List.of(), o -> o instanceof String);
+
+            builder.pop();
             builder.pop();
         }
     }

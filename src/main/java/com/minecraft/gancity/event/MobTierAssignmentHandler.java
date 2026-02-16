@@ -206,6 +206,12 @@ public class MobTierAssignmentHandler {
             return;
         }
 
+        // Infection-style mods often have their own equipment/phase systems.
+        // When infection compatibility is enabled, do not touch their equipment at all.
+        if (GANCityMod.shouldPreserveEquipmentForInfectionMobs(mob.getType())) {
+            return;
+        }
+
         try {
             mob.setCanPickUpLoot(true);
 

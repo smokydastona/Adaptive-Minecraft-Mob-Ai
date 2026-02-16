@@ -1,5 +1,7 @@
 package com.minecraft.gancity.mixin;
 
+import com.minecraft.gancity.GANCityMod;
+import com.minecraft.gancity.compat.InfectionHiveMindGoal;
 import com.minecraft.gancity.config.PerMobAiDefaultsStore;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -117,6 +119,15 @@ public abstract class MobAIEnhancementMixin {
 
             // Per-mob override: allow forcing default/vanilla AI for specific entities.
             if (entityTypeId != null && !PerMobAiDefaultsStore.isAiEnabledFor(entityTypeId)) {
+                return;
+            }
+
+            // Infection / hive-mind compatibility: for infected mobs, keep our changes non-invasive.
+            // We only add a lightweight target-broadcast goal.
+            if (GANCityMod.shouldInfectionHiveMindBeNonInvasive() && GANCityMod.isInfectionHiveMindMob(mob.getType())) {
+                if (mob instanceof Monster) {
+                    mob.goalSelector.addGoal(8, new InfectionHiveMindGoal(mob));
+                }
                 return;
             }
             

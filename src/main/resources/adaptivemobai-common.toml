@@ -71,6 +71,33 @@
 		# mobBowArrowOverrides = ["minecraft:skeleton=minecraft:spectral_arrow"]
 		mobBowArrowOverrides = []
 
+[compatibility.infection_hive_mind]
+	# === Infection Mod Compatibility (Hive Mind) ===
+	#
+	# For infection-style mods (Spore, Scape and Run: Parasites, The Sculk Horde, Flood, etc.).
+	# - "Hive mind": infected mobs share targets with nearby infected mobs.
+	# - "Non-invasive": avoid overriding those mods' custom AI/equipment systems.
+	#
+	# IMPORTANT: This uses mod namespaces to decide what counts as "infected".
+	# If your infection mod uses a different namespace, add it to infectionHiveMindMobNamespaces.
+	infectionHiveMindEnabled = true
+	infectionHiveMindNonInvasive = true
+	infectionHiveMindPreserveEquipment = true
+
+	# Range (blocks) to broadcast targets to allies
+	infectionHiveMindRangeBlocks = 32
+	# Cooldown between broadcasts (ticks). 20 ticks = 1 second.
+	infectionHiveMindCooldownTicks = 40
+	# Max nearby allies updated per broadcast
+	infectionHiveMindMaxAllies = 6
+	# If true, only set ally targets when they have no target
+	infectionHiveMindOnlyIfAllyHasNoTarget = true
+
+	# Treat all mobs from these namespaces as infected (best-effort defaults)
+	infectionHiveMindMobNamespaces = ["srparasites", "sculkhorde", "sculk_horde", "spore", "haloflood"]
+	# Optional: explicit infected entity ids (higher priority than namespace)
+	infectionHiveMindMobIds = []
+
 [mob_behaviors]
 	# === Individual Mob AI Toggles ===
 	
