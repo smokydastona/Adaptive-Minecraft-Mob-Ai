@@ -218,26 +218,31 @@ public class MobTierAssignmentHandler {
             // Prefer a per-player configured weapon list if a player is nearby.
             Player nearest = findNearestPlayer(mob);
             String mobTypeId = getMobTypeId(mob);
-            ItemStack weapon = PlayerMobLoadoutStore.chooseWeaponFor(nearest, mobTypeId, RANDOM);
-
-            // If no per-player override, fall back to global config per-mob loadouts.
-            if (weapon == null) {
-                weapon = GANCityMod.chooseConfiguredWeaponForMob(mobTypeId, RANDOM);
+            PlayerMobLoadoutStore.WeaponDecision decision = PlayerMobLoadoutStore.chooseWeaponFor(nearest, mobTypeId, RANDOM);
+            if (decision.type == PlayerMobLoadoutStore.WeaponDecisionType.NO_OVERRIDE) {
+                decision = GANCityMod.chooseConfiguredWeaponDecisionForMob(mobTypeId, RANDOM);
             }
 
-            // null => no override, use default random behavior.
-            // EMPTY => explicitly unarmed.
-            if (weapon == null) {
-                weapon = PlayerMobLoadoutStore.defaultWeapon(RANDOM);
-                mob.setItemSlot(EquipmentSlot.MAINHAND, weapon);
-            } else if (weapon.isEmpty()) {
-                mob.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
-            } else {
-                mob.setItemSlot(EquipmentSlot.MAINHAND, weapon);
+            ItemStack assignedWeapon = null;
+            switch (decision.type) {
+                case PRESERVE -> {
+                    // Explicitly do nothing. This lets other mods manage weapon distribution (including NBT).
+                }
+                case UNARMED -> mob.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+                case SET -> {
+                    assignedWeapon = decision.weapon;
+                    if (assignedWeapon != null) {
+                        mob.setItemSlot(EquipmentSlot.MAINHAND, assignedWeapon);
+                    }
+                }
+                case NO_OVERRIDE -> {
+                    assignedWeapon = PlayerMobLoadoutStore.defaultWeapon(RANDOM);
+                    mob.setItemSlot(EquipmentSlot.MAINHAND, assignedWeapon);
+                }
             }
 
-            // If mob spawned with a bow/crossbow, optionally give configured arrows.
-            if (weapon != null && !weapon.isEmpty() && weapon.getItem() instanceof ProjectileWeaponItem) {
+            // If we assigned a bow/crossbow, optionally give configured arrows.
+            if (assignedWeapon != null && !assignedWeapon.isEmpty() && assignedWeapon.getItem() instanceof ProjectileWeaponItem) {
                 ItemStack arrows = GANCityMod.getConfiguredArrowStackForMob(mobTypeId);
                 if (!arrows.isEmpty() && mob.getItemBySlot(EquipmentSlot.OFFHAND).isEmpty()) {
                     mob.setItemSlot(EquipmentSlot.OFFHAND, arrows);

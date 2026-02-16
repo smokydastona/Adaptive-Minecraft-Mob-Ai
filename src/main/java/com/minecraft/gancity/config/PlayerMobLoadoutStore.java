@@ -307,23 +307,61 @@ public final class PlayerMobLoadoutStore {
         return true;
     }
 
+    public enum WeaponDecisionType {
+        /** No configured override was found; caller may apply mod defaults. */
+        NO_OVERRIDE,
+        /** Explicitly preserve the mob's existing equipment (do not set slots). */
+        PRESERVE,
+        /** Explicitly unarmed. */
+        UNARMED,
+        /** Explicitly set to a specific weapon. */
+        SET
+    }
+
+    public static final class WeaponDecision {
+        public final WeaponDecisionType type;
+        public final ItemStack weapon;
+
+        private WeaponDecision(WeaponDecisionType type, ItemStack weapon) {
+            this.type = type;
+            this.weapon = weapon;
+        }
+
+        public static WeaponDecision noOverride() {
+            return new WeaponDecision(WeaponDecisionType.NO_OVERRIDE, null);
+        }
+
+        public static WeaponDecision preserve() {
+            return new WeaponDecision(WeaponDecisionType.PRESERVE, null);
+        }
+
+        public static WeaponDecision unarmed() {
+            return new WeaponDecision(WeaponDecisionType.UNARMED, ItemStack.EMPTY);
+        }
+
+        public static WeaponDecision set(ItemStack weapon) {
+            return new WeaponDecision(WeaponDecisionType.SET, weapon);
+        }
+    }
+
     /**
      * Returns:
-     * - null: no configured override (caller should use mod default behavior)
-     * - ItemStack.EMPTY: explicitly unarmed
-     * - non-empty ItemStack: configured weapon
+     * - NO_OVERRIDE: no configured override (caller may use mod default behavior)
+     * - PRESERVE: explicitly do not touch the mob's equipment (compatibility mode)
+     * - UNARMED: explicitly unarmed
+     * - SET: configured weapon
      */
-    public static ItemStack chooseWeaponFor(Player player, String mobTypeId, Random random) {
+    public static WeaponDecision chooseWeaponFor(Player player, String mobTypeId, Random random) {
         if (player == null) {
-            return null;
+            return WeaponDecision.noOverride();
         }
 
         PlayerLoadout loadout = get(player.getUUID()).orElse(null);
         if (loadout == null || !loadout.enabled) {
-            return null;
+            return WeaponDecision.noOverride();
         }
         if (loadout.mobs == null || loadout.mobs.isEmpty()) {
-            return null;
+            return WeaponDecision.noOverride();
         }
 
         String normalizedMob = normalizeMobId(mobTypeId);
@@ -332,15 +370,15 @@ public final class PlayerMobLoadoutStore {
             mobLoadout = loadout.mobs.get(DEFAULT_MOB_KEY);
         }
         if (mobLoadout == null || !mobLoadout.enabled) {
-            return null;
+            return WeaponDecision.noOverride();
         }
 
         List<WeaponOption> options = mobLoadout.options;
         if (options == null || options.isEmpty()) {
-            return null;
+            return WeaponDecision.noOverride();
         }
 
-        // Build a list of valid options (including unarmed).
+        // Build a list of valid options (including preserve/unarmed).
         List<WeaponOption> valid = new ArrayList<>();
         double total = 0.0;
         for (WeaponOption opt : options) {
@@ -349,6 +387,11 @@ public final class PlayerMobLoadoutStore {
             }
 
             String token = opt.item.trim();
+            if (isPreserveToken(token)) {
+                valid.add(opt);
+                total += opt.weight;
+                continue;
+            }
             if (isUnarmedToken(token)) {
                 valid.add(opt);
                 total += opt.weight;
@@ -370,28 +413,38 @@ public final class PlayerMobLoadoutStore {
         }
 
         if (valid.isEmpty() || total <= 0.0) {
-            return null;
+            return WeaponDecision.noOverride();
         }
 
         double roll = random.nextDouble() * total;
         for (WeaponOption opt : valid) {
             roll -= opt.weight;
             if (roll <= 0.0) {
-                if (opt.item != null && isUnarmedToken(opt.item)) {
-                    return ItemStack.EMPTY;
+                if (opt.item != null) {
+                    if (isPreserveToken(opt.item)) {
+                        return WeaponDecision.preserve();
+                    }
+                    if (isUnarmedToken(opt.item)) {
+                        return WeaponDecision.unarmed();
+                    }
                 }
                 Item item = resolveItem(opt.item);
-                return item == null ? null : new ItemStack(item);
+                return item == null ? WeaponDecision.noOverride() : WeaponDecision.set(new ItemStack(item));
             }
         }
 
         // Fallback to last.
         WeaponOption opt = valid.get(valid.size() - 1);
-        if (opt.item != null && isUnarmedToken(opt.item)) {
-            return ItemStack.EMPTY;
+        if (opt.item != null) {
+            if (isPreserveToken(opt.item)) {
+                return WeaponDecision.preserve();
+            }
+            if (isUnarmedToken(opt.item)) {
+                return WeaponDecision.unarmed();
+            }
         }
         Item item = resolveItem(opt.item);
-        return item == null ? null : new ItemStack(item);
+        return item == null ? WeaponDecision.noOverride() : WeaponDecision.set(new ItemStack(item));
     }
 
     public static ItemStack defaultWeapon(Random random) {
@@ -493,9 +546,20 @@ public final class PlayerMobLoadoutStore {
         return t.equals("none") || t.equals("unarmed") || t.equals("empty") || t.equals("air");
     }
 
+    private static boolean isPreserveToken(String token) {
+        if (token == null) {
+            return false;
+        }
+        String t = token.trim().toLowerCase(Locale.ROOT);
+        return t.equals("default") || t.equals("preserve");
+    }
+
     private static String normalizeWeaponToken(String token) {
         if (token == null || token.isBlank()) {
             return null;
+        }
+        if (isPreserveToken(token)) {
+            return "default";
         }
         if (isUnarmedToken(token)) {
             return "none";

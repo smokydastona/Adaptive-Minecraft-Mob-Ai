@@ -48,6 +48,8 @@
 	# mobWeaponLoadouts = ["<mobId>=<weapon1>,<weapon2>,<weapon3>,<weapon4>,<weapon5>"]
 	#
 	# Use 'none' to allow unarmed spawns.
+	# Use 'default' to preserve whatever weapon the mob already has (do not modify equipment).
+	# This is useful if you use another mod to manage mob weapons (including modded/NBT items).
 	#
 	# Examples:
 	# mobWeaponLoadouts = [

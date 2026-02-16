@@ -217,40 +217,61 @@ public class GANCityMod {
         bowArrowOverrides = parseKeyValueMap(COMMON.mobBowArrowOverrides.get());
     }
 
-    public static ItemStack chooseConfiguredWeaponForMob(String mobTypeId, Random random) {
+    public static PlayerMobLoadoutStore.WeaponDecision chooseConfiguredWeaponDecisionForMob(String mobTypeId, Random random) {
         loadConfigIfNeeded();
         if (mobTypeId == null || mobTypeId.isBlank()) {
-            return null;
+            return PlayerMobLoadoutStore.WeaponDecision.noOverride();
         }
 
         List<String> options = globalMobWeaponLoadouts.get(mobTypeId);
         if (options == null || options.isEmpty()) {
-            return null;
+            return PlayerMobLoadoutStore.WeaponDecision.noOverride();
         }
 
         String selected = options.get(random.nextInt(options.size()));
         if (selected == null) {
-            return null;
+            return PlayerMobLoadoutStore.WeaponDecision.noOverride();
         }
 
         selected = selected.trim();
         if (selected.isEmpty()) {
-            return null;
+            return PlayerMobLoadoutStore.WeaponDecision.noOverride();
         }
 
         if (selected.equalsIgnoreCase("none")) {
-            return ItemStack.EMPTY;
+            return PlayerMobLoadoutStore.WeaponDecision.unarmed();
+        }
+
+        if (selected.equalsIgnoreCase("default") || selected.equalsIgnoreCase("preserve")) {
+            return PlayerMobLoadoutStore.WeaponDecision.preserve();
         }
 
         ResourceLocation id = safeResourceLocation(selected);
         if (id == null) {
-            return null;
+            return PlayerMobLoadoutStore.WeaponDecision.noOverride();
         }
         Item item = ForgeRegistries.ITEMS.getValue(id);
         if (item == null || item == Items.AIR) {
-            return null;
+            return PlayerMobLoadoutStore.WeaponDecision.noOverride();
         }
-        return new ItemStack(item);
+        return PlayerMobLoadoutStore.WeaponDecision.set(new ItemStack(item));
+    }
+
+    /**
+     * Legacy API (ItemStack-based). Prefer {@link #chooseConfiguredWeaponDecisionForMob(String, Random)}.
+     *
+     * Returns:
+     * - null: no override (or PRESERVE)
+     * - ItemStack.EMPTY: explicitly unarmed
+     * - non-empty ItemStack: configured weapon
+     */
+    public static ItemStack chooseConfiguredWeaponForMob(String mobTypeId, Random random) {
+        PlayerMobLoadoutStore.WeaponDecision decision = chooseConfiguredWeaponDecisionForMob(mobTypeId, random);
+        return switch (decision.type) {
+            case UNARMED -> ItemStack.EMPTY;
+            case SET -> decision.weapon;
+            case PRESERVE, NO_OVERRIDE -> null;
+        };
     }
 
     public static ItemStack getConfiguredArrowStackForMob(String mobTypeId) {
