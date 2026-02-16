@@ -11,8 +11,6 @@ import com.minecraft.gancity.config.PerMobAiDefaultsStore;
 import com.minecraft.gancity.mca.MCAIntegration;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -22,7 +20,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.AABB;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
@@ -128,8 +125,6 @@ public class GANCityMod {
     private static volatile java.util.Set<String> infectionHiveMindMobIds = java.util.Set.of();
 
     private static final String INFECTION_HIVE_NEXT_BROADCAST_TICK_TAG = "adaptivemobai_infection_hive_next";
-    private static final String INFECTION_HIVE_NEXT_DAMAGE_HAPTIC_TICK_TAG = "adaptivemobai_infection_hive_next_damage_haptic";
-    private static final int INFECTION_HIVE_DAMAGE_HAPTIC_COOLDOWN_TICKS = 10;
 
     private static final CommonConfig COMMON;
     private static final ForgeConfigSpec COMMON_SPEC;
@@ -381,46 +376,6 @@ public class GANCityMod {
                 // Never break gameplay for a compatibility feature.
             }
         }
-    }
-
-    public static void tryInfectionHiveMindDamageHaptic(Mob caller, float amount) {
-        if (caller == null || !caller.isAlive()) {
-            return;
-        }
-        if (caller.level().isClientSide()) {
-            return;
-        }
-        if (amount <= 0.0f) {
-            return;
-        }
-
-        loadConfigIfNeeded();
-        if (!infectionHiveMindEnabled) {
-            return;
-        }
-        if (!isInfectionHiveMindMob(caller.getType())) {
-            return;
-        }
-
-        int nextAllowedTick = caller.getPersistentData().getInt(INFECTION_HIVE_NEXT_DAMAGE_HAPTIC_TICK_TAG);
-        if (caller.tickCount < nextAllowedTick) {
-            return;
-        }
-        caller.getPersistentData().putInt(
-            INFECTION_HIVE_NEXT_DAMAGE_HAPTIC_TICK_TAG,
-            caller.tickCount + INFECTION_HIVE_DAMAGE_HAPTIC_COOLDOWN_TICKS
-        );
-
-        caller.level().playSound(
-            null,
-            caller.getX(),
-            caller.getY(),
-            caller.getZ(),
-            SoundEvents.SCULK_SENSOR_CLICKING,
-            SoundSource.HOSTILE,
-            0.6F,
-            1.0F
-        );
     }
 
     public static PlayerMobLoadoutStore.WeaponDecision chooseConfiguredWeaponDecisionForMob(String mobTypeId, Random random) {
@@ -834,17 +789,6 @@ public class GANCityMod {
         } catch (Exception e) {
             LOGGER.error("Exception in server tick: {}", e.getMessage());
         }
-    }
-
-    @SubscribeEvent
-    public void onLivingHurt(LivingHurtEvent event) {
-        if (event == null) {
-            return;
-        }
-        if (!(event.getEntity() instanceof Mob mob)) {
-            return;
-        }
-        tryInfectionHiveMindDamageHaptic(mob, event.getAmount());
     }
     
     private void performAutoSave() {
