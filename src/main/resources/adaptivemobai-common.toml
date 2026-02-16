@@ -94,7 +94,7 @@
 	infectionHiveMindOnlyIfAllyHasNoTarget = true
 
 	# Treat all mobs from these namespaces as infected (best-effort defaults)
-	infectionHiveMindMobNamespaces = ["srparasites", "sculkhorde", "sculk_horde", "spore", "haloflood"]
+	infectionHiveMindMobNamespaces = ["srparasites", "sculkhorde", "sculk_horde", "spore", "fungal_infection", "fungalinfectionspore", "dawnoftheflood", "dawn_of_the_flood", "dotf", "haloflood"]
 	# Optional: explicit infected entity ids (higher priority than namespace)
 	infectionHiveMindMobIds = []
 

@@ -118,6 +118,8 @@ public class GANCityMod {
         "sculkhorde",
         "sculk_horde",
         "spore",
+        "fungal_infection",
+        "fungalinfectionspore",
         "haloflood"
     );
     private static volatile java.util.Set<String> infectionHiveMindMobIds = java.util.Set.of();
@@ -1115,6 +1117,11 @@ public class GANCityMod {
                     "sculkhorde",
                     "sculk_horde",
                     "spore",
+                    "fungal_infection",
+                    "fungalinfectionspore",
+                    "dawnoftheflood",
+                    "dawn_of_the_flood",
+                    "dotf",
                     "haloflood"
                 ), o -> o instanceof String);
 
