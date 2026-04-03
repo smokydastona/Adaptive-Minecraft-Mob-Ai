@@ -13,6 +13,7 @@ import net.minecraft.world.item.Items;
 import org.slf4j.Logger;
 
 import java.util.EnumSet;
+import java.util.Objects;
 
 /**
  * AI-Enhanced Melee Attack Goal - standalone version without mixins
@@ -43,14 +44,15 @@ public class EnhancedMeleeGoal extends Goal {
     
     public EnhancedMeleeGoal(Mob mob, double speedModifier, boolean followEvenIfNotSeen, 
                            boolean enableEnvironmental, boolean isVillager) {
-        this.mob = mob;
+        this.mob = Objects.requireNonNull(mob, "mob");
         this.speedModifier = speedModifier;
         this.followingTargetEvenIfNotSeen = followEvenIfNotSeen;
         this.enableEnvironmentalTactics = enableEnvironmental;
         this.isVillager = isVillager;
-        this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
+        EnumSet<Goal.Flag> goalFlags = EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK);
+        this.setFlags(Objects.requireNonNull(goalFlags, "goalFlags"));
         this.behaviorAI = GANCityMod.getMobBehaviorAI();
-        this.mobId = mob.getUUID().toString();
+        this.mobId = this.mob.getUUID().toString();
         
         if (isVillager) {
             this.persistentProfile = loadOrCreatePersistentProfile();
@@ -67,7 +69,7 @@ public class EnhancedMeleeGoal extends Goal {
             String[] profiles = {"aggressive_guard", "defensive_guard", "tactical_guard", 
                                 "cautious_defender", "berserker_guard", "strategic_defender"};
             String newProfile = profiles[mob.getRandom().nextInt(profiles.length)];
-            persistentData.putString("MCA_AI_Profile", newProfile);
+            persistentData.putString("MCA_AI_Profile", Objects.requireNonNull(newProfile, "newProfile"));
             return newProfile;
         } catch (Exception e) {
             return "defensive_guard";
@@ -100,27 +102,29 @@ public class EnhancedMeleeGoal extends Goal {
         if (!this.followingTargetEvenIfNotSeen) {
             return !this.mob.getNavigation().isDone();
         }
-        return this.mob.isWithinRestriction(target.blockPosition());
+        return this.mob.isWithinRestriction(Objects.requireNonNull(target.blockPosition(), "targetPosition"));
     }
 
     private static boolean isHoldingSupportedRangedWeapon(Mob mob) {
         if (mob == null) return false;
         ItemStack main = mob.getMainHandItem();
-        return main.getItem() instanceof BowItem
-            || main.getItem() instanceof CrossbowItem
-            || main.is(Items.BOW)
-            || main.is(Items.CROSSBOW)
-            || main.is(Items.TRIDENT);
+        Object mainItem = Objects.requireNonNull(main.getItem(), "mainHandItem");
+        return mainItem instanceof BowItem
+            || mainItem instanceof CrossbowItem
+            || main.is(Objects.requireNonNull(Items.BOW, "bow"))
+            || main.is(Objects.requireNonNull(Items.CROSSBOW, "crossbow"))
+            || main.is(Objects.requireNonNull(Items.TRIDENT, "trident"));
     }
     
     @Override
     public void start() {
-        this.mob.getNavigation().moveTo(this.target, this.speedModifier);
+        LivingEntity currentTarget = Objects.requireNonNull(this.target, "target");
+        this.mob.getNavigation().moveTo(currentTarget, this.speedModifier);
         this.ticksUntilNextAction = 0;
         this.ticksUntilNextAIUpdate = AI_UPDATE_INTERVAL;
         this.combatTicks = 0;
         this.initialMobHealth = mob.getHealth() / mob.getMaxHealth();
-        this.initialTargetHealth = target.getHealth() / target.getMaxHealth();
+        this.initialTargetHealth = currentTarget.getHealth() / currentTarget.getMaxHealth();
         
         behaviorAI.startCombatSequence(mobId);
         String mobType = mob.getType().getDescription().getString().toLowerCase();
@@ -170,11 +174,12 @@ public class EnhancedMeleeGoal extends Goal {
             }
             
             combatTicks++;
-            this.mob.getLookControl().setLookAt(this.target, 30.0F, 30.0F);
+            LivingEntity currentTarget = Objects.requireNonNull(this.target, "target");
+            this.mob.getLookControl().setLookAt(currentTarget, 30.0F, 30.0F);
             
-            if (combatTicks % 10 == 0 && target instanceof net.minecraft.world.entity.player.Player) {
+            if (combatTicks % 10 == 0 && currentTarget instanceof net.minecraft.world.entity.player.Player) {
                 if (behaviorAI != null) {
-                    behaviorAI.recordTacticalSample(mobId, mob, (net.minecraft.world.entity.player.Player) target, 0);
+                    behaviorAI.recordTacticalSample(mobId, mob, (net.minecraft.world.entity.player.Player) currentTarget, 0);
                 }
             }
             
@@ -195,18 +200,19 @@ public class EnhancedMeleeGoal extends Goal {
     
     private void recordCombatOutcome() {
         if (behaviorAI == null || target == null) return;
+        LivingEntity currentTarget = Objects.requireNonNull(target, "target");
         
         MobBehaviorAI.MobState finalState = new MobBehaviorAI.MobState(
             mob.getHealth() / mob.getMaxHealth(),
-            target.getHealth() / target.getMaxHealth(),
-            (float) mob.distanceTo(target)
+            currentTarget.getHealth() / currentTarget.getMaxHealth(),
+            (float) mob.distanceTo(currentTarget)
         );
         finalState.combatTime = combatTicks / 20.0f;
         finalState.isNight = !mob.level().isDay();
-        finalState.biome = mob.level().getBiome(mob.blockPosition()).toString();
+        finalState.biome = mob.level().getBiome(Objects.requireNonNull(mob.blockPosition(), "mobPosition")).toString();
         
         boolean mobDied = !mob.isAlive();
-        boolean playerDied = !target.isAlive();
+        boolean playerDied = !currentTarget.isAlive();
         behaviorAI.recordCombatOutcome(mobId, playerDied, mobDied, finalState, 0.0f, 0.0f, mob);
     }
     
@@ -216,15 +222,16 @@ public class EnhancedMeleeGoal extends Goal {
             if (target == null || !target.isAlive() || mob == null || !mob.isAlive()) {
                 return;
             }
+            LivingEntity currentTarget = Objects.requireNonNull(target, "target");
             
             MobBehaviorAI.MobState state = new MobBehaviorAI.MobState(
                 mob.getHealth() / mob.getMaxHealth(),
-                target.getHealth() / target.getMaxHealth(),
-                (float) mob.distanceTo(target)
+                currentTarget.getHealth() / currentTarget.getMaxHealth(),
+                (float) mob.distanceTo(currentTarget)
             );
         
         state.isNight = !mob.level().isDay();
-        state.biome = mob.level().getBiome(mob.blockPosition()).toString();
+        state.biome = mob.level().getBiome(Objects.requireNonNull(mob.blockPosition(), "mobPosition")).toString();
         state.combatTime = combatTicks / 20.0f;
         
         if (mob instanceof Spider) {
@@ -284,13 +291,14 @@ public class EnhancedMeleeGoal extends Goal {
             if (target == null || !target.isAlive() || mob == null || !mob.isAlive()) {
                 return;
             }
+            LivingEntity currentTarget = Objects.requireNonNull(target, "target");
             
-            double distance = mob.distanceTo(target);
+            double distance = mob.distanceTo(currentTarget);
             double baseSpeed = speedModifier;
         
         switch (currentAction) {
             case "straight_charge":
-                mob.getNavigation().moveTo(target, baseSpeed * 1.2);
+                mob.getNavigation().moveTo(currentTarget, baseSpeed * 1.2);
                 break;
             case "circle_strafe":
                 circleAroundTarget(baseSpeed);
@@ -300,23 +308,23 @@ public class EnhancedMeleeGoal extends Goal {
                 break;
             case "ambush":
                 if (distance > 5.0) mob.getNavigation().stop();
-                else mob.getNavigation().moveTo(target, baseSpeed * 1.5);
+                else mob.getNavigation().moveTo(currentTarget, baseSpeed * 1.5);
                 break;
             case "group_rush":
             case "suicide_rush":
-                mob.getNavigation().moveTo(target, baseSpeed * 1.3);
+                mob.getNavigation().moveTo(currentTarget, baseSpeed * 1.3);
                 break;
             case "retreat_reload":
             case "fake_retreat":
                 if (mob.getRandom().nextFloat() < 0.7f) retreatFromTarget(baseSpeed);
                 break;
             default:
-                mob.getNavigation().moveTo(target, baseSpeed);
+                mob.getNavigation().moveTo(currentTarget, baseSpeed);
                 break;
         }
         
-        if (distance <= mob.getBbWidth() * 2.0F + target.getBbWidth()) {
-            mob.doHurtTarget(target);
+        if (distance <= mob.getBbWidth() * 2.0F + currentTarget.getBbWidth()) {
+            mob.doHurtTarget(currentTarget);
         }
         } catch (Exception e) {
             LOGGER.error("Exception in executeAction: {}", e.getMessage());
