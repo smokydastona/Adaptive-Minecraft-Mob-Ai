@@ -18,6 +18,10 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
         cache: 'gradle'
+
+    - name: Verify language files
+      shell: pwsh
+      run: ./tools/verify_lang_files.ps1
     
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew

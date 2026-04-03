@@ -25,6 +25,10 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
         cache: 'gradle'
+
+    - name: Verify language files
+      shell: pwsh
+      run: ./tools/verify_lang_files.ps1
     
     - name: Get development version
       id: version

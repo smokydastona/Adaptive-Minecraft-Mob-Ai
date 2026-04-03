@@ -33,6 +33,10 @@ jobs:
         java-version: '17'
         cache: 'gradle'
 
+    - name: Verify language files
+      shell: pwsh
+      run: ./tools/verify_lang_files.ps1
+
     - name: Determine build version
       id: version
       run: |

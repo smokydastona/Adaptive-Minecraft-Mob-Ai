@@ -8,6 +8,11 @@ All notable changes to Adaptive Mob AI will be documented in this file.
 - Per-mob AI overrides: new config UI page to force specific entities (vanilla or modded) to keep default/vanilla AI (skips goal injection)
   - Persisted in `config/adaptivemobai-per-mob-ai.json`
 
+### Fixed
+- JDT/IDE warning cleanup across Forge AI classes
+  - Removed ignored `null`/`unused` suppression noise where safe, including `EnhancedMeleeGoal`
+  - Cleaned up `VisualPerception` by removing dead `preferredWeapon` state and replacing warning-prone item checks/counter updates with explicit null-safe logic
+
 ## [1.1.194]
 
 ### Fixed
