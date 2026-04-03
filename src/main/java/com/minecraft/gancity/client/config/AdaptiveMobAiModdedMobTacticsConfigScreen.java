@@ -101,11 +101,13 @@ public final class AdaptiveMobAiModdedMobTacticsConfigScreen extends Screen {
             working.enabled = !working.enabled;
             refreshRightPanel();
         }).bounds(rightX, rowY, fieldW, rowH).build());
+        AdaptiveMobAiUiText.setTooltip(toggleEnabled, "config.adaptivemobai.tooltip.modded.mapping");
 
         toggleAuto = addRenderableWidget(Button.builder(Component.literal("Auto-Assign: " + (working.autoAssignEnabled ? "ON" : "OFF")), b -> {
             working.autoAssignEnabled = !working.autoAssignEnabled;
             refreshRightPanel();
         }).bounds(rightX, rowY + (rowH + gap), fieldW, rowH).build());
+        AdaptiveMobAiUiText.setTooltip(toggleAuto, "config.adaptivemobai.tooltip.modded.auto_assign");
 
         toggleShowVanilla = addRenderableWidget(Button.builder(Component.literal("Show Vanilla: " + (showVanilla ? "ON" : "OFF")), b -> {
             showVanilla = !showVanilla;
@@ -113,10 +115,12 @@ public final class AdaptiveMobAiModdedMobTacticsConfigScreen extends Screen {
             refreshList();
             toggleShowVanilla.setMessage(Component.literal("Show Vanilla: " + (showVanilla ? "ON" : "OFF")));
         }).bounds(rightX, rowY + (rowH + gap) * 2, fieldW, rowH).build());
+        AdaptiveMobAiUiText.setTooltip(toggleShowVanilla, "config.adaptivemobai.tooltip.modded.show_vanilla");
 
         setOverride = addRenderableWidget(Button.builder(Component.literal("Set Override"), b -> openProfilePicker())
             .bounds(rightX, rowY + (rowH + gap) * 3, fieldW, rowH)
             .build());
+        AdaptiveMobAiUiText.setTooltip(setOverride, "config.adaptivemobai.tooltip.modded.set_override");
 
         clearOverride = addRenderableWidget(Button.builder(Component.literal("Clear Override"), b -> {
             if (selectedEntityId != null) {
@@ -125,24 +129,29 @@ public final class AdaptiveMobAiModdedMobTacticsConfigScreen extends Screen {
                 refreshList();
             }
         }).bounds(rightX, rowY + (rowH + gap) * 4, fieldW, rowH).build());
+        AdaptiveMobAiUiText.setTooltip(clearOverride, "config.adaptivemobai.tooltip.modded.clear_override");
 
         // Default profiles (simple global fallbacks)
-        addRenderableWidget(Button.builder(Component.literal("Default Hostile: " + working.defaultHostileProfile), b -> {
+        Button defaultHostile = addRenderableWidget(Button.builder(Component.literal("Default Hostile: " + working.defaultHostileProfile), b -> {
             openProfilePickerForDefault(true);
         }).bounds(rightX, rowY + (rowH + gap) * 5, fieldW, rowH).build());
+        AdaptiveMobAiUiText.setTooltip(defaultHostile, "config.adaptivemobai.tooltip.modded.default_hostile");
 
-        addRenderableWidget(Button.builder(Component.literal("Default Passive: " + working.defaultPassiveProfile), b -> {
+        Button defaultPassive = addRenderableWidget(Button.builder(Component.literal("Default Passive: " + working.defaultPassiveProfile), b -> {
             openProfilePickerForDefault(false);
         }).bounds(rightX, rowY + (rowH + gap) * 6, fieldW, rowH).build());
+        AdaptiveMobAiUiText.setTooltip(defaultPassive, "config.adaptivemobai.tooltip.modded.default_passive");
 
-        addRenderableWidget(Button.builder(Component.literal("Save"), b -> {
+        Button save = addRenderableWidget(Button.builder(Component.literal("Save"), b -> {
             applyAndSave();
             onClose();
         }).bounds(rightX, bottomButtonsY, 100, 20).build());
+        AdaptiveMobAiUiText.setTooltip(save, "config.adaptivemobai.tooltip.common.save");
 
-        addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onClose())
+        Button cancel = addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onClose())
             .bounds(rightX + 110, bottomButtonsY, 100, 20)
             .build());
+        AdaptiveMobAiUiText.setTooltip(cancel, "config.adaptivemobai.tooltip.common.cancel");
 
         // Initial selection
         if (!allEntityIds.isEmpty()) {

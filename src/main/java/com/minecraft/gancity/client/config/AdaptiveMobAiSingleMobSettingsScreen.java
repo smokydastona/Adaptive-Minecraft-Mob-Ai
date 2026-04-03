@@ -7,11 +7,11 @@ import com.minecraft.gancity.config.PerMobAiDefaultsStore;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,9 +46,10 @@ public final class AdaptiveMobAiSingleMobSettingsScreen extends Screen {
         int y = this.height / 4;
         int w = Math.min(320, this.width - 40);
 
-        addRenderableWidget(Button.builder(Component.literal("Loadouts"), b ->
+        Button loadouts = addRenderableWidget(Button.builder(Component.literal("Loadouts"), b ->
             Minecraft.getInstance().setScreen(new AdaptiveMobAiLoadoutConfigScreen(this))
         ).bounds(centerX - w / 2, y, w, 20).build());
+        AdaptiveMobAiUiText.setTooltip(loadouts, "config.adaptivemobai.tooltip.single.loadouts");
 
         toggleEnhanced = addRenderableWidget(Button.builder(Component.literal("Enhanced AI: ?"), b -> {
             boolean currentlyEnabled = PerMobAiDefaultsStore.isAiEnabledFor(entityTypeId);
@@ -56,19 +57,23 @@ public final class AdaptiveMobAiSingleMobSettingsScreen extends Screen {
             PerMobAiDefaultsStore.setOverride(entityTypeId, !currentlyEnabled);
             refreshButtons();
         }).bounds(centerX - w / 2, y + 24, w, 20).build());
+        AdaptiveMobAiUiText.setTooltip(toggleEnhanced, "config.adaptivemobai.tooltip.single.enhanced_ai");
 
         setProfile = addRenderableWidget(Button.builder(Component.literal("Tactic Profile: ?"), b -> openProfilePicker())
             .bounds(centerX - w / 2, y + 48, w, 20)
             .build());
+        AdaptiveMobAiUiText.setTooltip(setProfile, "config.adaptivemobai.tooltip.single.tactic_profile");
 
         clearProfile = addRenderableWidget(Button.builder(Component.literal("Clear Profile Override"), b -> {
             ModdedMobTacticMappingStore.setOverride(entityTypeId, null);
             refreshButtons();
         }).bounds(centerX - w / 2, y + 72, w, 20).build());
+        AdaptiveMobAiUiText.setTooltip(clearProfile, "config.adaptivemobai.tooltip.single.clear_profile");
 
-        addRenderableWidget(Button.builder(Component.literal("Back"), b -> onClose())
+        Button back = addRenderableWidget(Button.builder(Component.literal("Back"), b -> onClose())
             .bounds(centerX - w / 2, y + 108, w, 20)
             .build());
+        AdaptiveMobAiUiText.setTooltip(back, "config.adaptivemobai.tooltip.common.back");
 
         refreshButtons();
     }
@@ -79,6 +84,7 @@ public final class AdaptiveMobAiSingleMobSettingsScreen extends Screen {
 
         String currentOverride = ModdedMobTacticMappingStore.getOverride(entityTypeId).orElse(null);
         String computed = computeEffectiveProfile(entityTypeId, currentOverride);
+        clearProfile.active = currentOverride != null && !currentOverride.isBlank();
 
         String label;
         if (currentOverride != null && !currentOverride.isBlank()) {
@@ -122,11 +128,11 @@ public final class AdaptiveMobAiSingleMobSettingsScreen extends Screen {
         }
 
         // Fallback: vanilla mob entity paths as profile keys
-        return BuiltInRegistries.ENTITY_TYPE.keySet().stream()
+        return ForgeRegistries.ENTITY_TYPES.getKeys().stream()
             .filter(rl -> "minecraft".equals(rl.getNamespace()))
             .filter(rl -> {
-                EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.get(rl);
-                return type.getCategory() != MobCategory.MISC;
+                EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(rl);
+                return type != null && type.getCategory() != MobCategory.MISC;
             })
             .map(ResourceLocation::getPath)
             .sorted()
@@ -148,8 +154,8 @@ public final class AdaptiveMobAiSingleMobSettingsScreen extends Screen {
         }
 
         // For modded mobs, fall back to the same heuristic used elsewhere: path similarity by category.
-        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.get(rl);
-        MobCategory category = type.getCategory();
+        EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(rl);
+        MobCategory category = type == null ? MobCategory.MISC : type.getCategory();
 
         // If auto-assign is off, show fallback default
         ModdedMobTacticMappingStore.Config cfg = ModdedMobTacticMappingStore.get();
@@ -172,12 +178,12 @@ public final class AdaptiveMobAiSingleMobSettingsScreen extends Screen {
 
         // Very small heuristic: if the modded path contains a vanilla mob path substring, use it.
         String path = rl.getPath().toLowerCase(Locale.ROOT);
-        for (ResourceLocation v : BuiltInRegistries.ENTITY_TYPE.keySet()) {
+        for (ResourceLocation v : ForgeRegistries.ENTITY_TYPES.getKeys()) {
             if (!"minecraft".equals(v.getNamespace())) {
                 continue;
             }
-            EntityType<?> vt = BuiltInRegistries.ENTITY_TYPE.get(v);
-            if (vt.getCategory() != category) {
+            EntityType<?> vt = ForgeRegistries.ENTITY_TYPES.getValue(v);
+            if (vt == null || vt.getCategory() != category) {
                 continue;
             }
             String vp = v.getPath().toLowerCase(Locale.ROOT);

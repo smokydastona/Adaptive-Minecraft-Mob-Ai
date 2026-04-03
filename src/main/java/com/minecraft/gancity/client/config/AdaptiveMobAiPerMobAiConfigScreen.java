@@ -80,6 +80,7 @@ public final class AdaptiveMobAiPerMobAiConfigScreen extends Screen {
             working.enabled = !working.enabled;
             refreshRightPanel();
         }).bounds(rightX, rowY, fieldW, rowH).build());
+        AdaptiveMobAiUiText.setTooltip(toggleEnabled, "config.adaptivemobai.tooltip.per_mob.overrides");
 
         toggleShowVanilla = addRenderableWidget(Button.builder(Component.literal("Show Vanilla: " + (showVanilla ? "ON" : "OFF")), b -> {
             showVanilla = !showVanilla;
@@ -87,6 +88,7 @@ public final class AdaptiveMobAiPerMobAiConfigScreen extends Screen {
             refreshList();
             toggleShowVanilla.setMessage(Component.literal("Show Vanilla: " + (showVanilla ? "ON" : "OFF")));
         }).bounds(rightX, rowY + (rowH + gap), fieldW, rowH).build());
+        AdaptiveMobAiUiText.setTooltip(toggleShowVanilla, "config.adaptivemobai.tooltip.per_mob.show_vanilla");
 
         setVanilla = addRenderableWidget(Button.builder(Component.literal("Set: Vanilla AI"), b -> {
             if (selectedEntityId != null) {
@@ -95,6 +97,7 @@ public final class AdaptiveMobAiPerMobAiConfigScreen extends Screen {
                 refreshList();
             }
         }).bounds(rightX, rowY + (rowH + gap) * 2, fieldW, rowH).build());
+        AdaptiveMobAiUiText.setTooltip(setVanilla, "config.adaptivemobai.tooltip.per_mob.set_vanilla");
 
         setEnhanced = addRenderableWidget(Button.builder(Component.literal("Set: Enhanced AI"), b -> {
             if (selectedEntityId != null) {
@@ -103,6 +106,7 @@ public final class AdaptiveMobAiPerMobAiConfigScreen extends Screen {
                 refreshList();
             }
         }).bounds(rightX, rowY + (rowH + gap) * 3, fieldW, rowH).build());
+        AdaptiveMobAiUiText.setTooltip(setEnhanced, "config.adaptivemobai.tooltip.per_mob.set_enhanced");
 
         clearOverride = addRenderableWidget(Button.builder(Component.literal("Clear Override"), b -> {
             if (selectedEntityId != null) {
@@ -111,15 +115,18 @@ public final class AdaptiveMobAiPerMobAiConfigScreen extends Screen {
                 refreshList();
             }
         }).bounds(rightX, rowY + (rowH + gap) * 4, fieldW, rowH).build());
+        AdaptiveMobAiUiText.setTooltip(clearOverride, "config.adaptivemobai.tooltip.per_mob.clear_override");
 
-        addRenderableWidget(Button.builder(Component.literal("Save"), b -> {
+        Button save = addRenderableWidget(Button.builder(Component.literal("Save"), b -> {
             applyAndSave();
             onClose();
         }).bounds(rightX, bottomButtonsY, 100, 20).build());
+        AdaptiveMobAiUiText.setTooltip(save, "config.adaptivemobai.tooltip.common.save");
 
-        addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onClose())
+        Button cancel = addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onClose())
             .bounds(rightX + 110, bottomButtonsY, 100, 20)
             .build());
+        AdaptiveMobAiUiText.setTooltip(cancel, "config.adaptivemobai.tooltip.common.cancel");
 
         if (!allEntityIds.isEmpty()) {
             setSelectedEntity(allEntityIds.get(0));

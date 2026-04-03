@@ -5,11 +5,11 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.List;
 import java.util.Locale;
@@ -56,9 +56,10 @@ public final class AdaptiveMobAiMobAiSettingsScreen extends Screen {
         mobList.setLeftPos(listX);
         addRenderableWidget(mobList);
 
-        addRenderableWidget(Button.builder(Component.literal("Back"), b -> onClose())
+        Button back = addRenderableWidget(Button.builder(Component.literal("Back"), b -> onClose())
             .bounds(listX, bottomButtonsY, 120, 20)
             .build());
+        AdaptiveMobAiUiText.setTooltip(back, "config.adaptivemobai.tooltip.common.back");
 
         refreshList();
     }
@@ -89,13 +90,13 @@ public final class AdaptiveMobAiMobAiSettingsScreen extends Screen {
     }
 
     private static List<String> buildMobIdList(boolean vanillaOnly) {
-        Set<ResourceLocation> keys = BuiltInRegistries.ENTITY_TYPE.keySet();
+        Set<ResourceLocation> keys = ForgeRegistries.ENTITY_TYPES.getKeys();
 
         return keys.stream()
             .filter(rl -> !vanillaOnly || "minecraft".equals(rl.getNamespace()))
             .filter(rl -> {
-                EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.get(rl);
-                return type.getCategory() != MobCategory.MISC;
+                EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(rl);
+                return type != null && type.getCategory() != MobCategory.MISC;
             })
             .map(ResourceLocation::toString)
             .sorted()

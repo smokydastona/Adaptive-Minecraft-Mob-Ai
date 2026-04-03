@@ -26,17 +26,25 @@ public final class AdaptiveMobAiConfigScreen extends Screen {
         int y = this.height / 4;
         int w = Math.min(260, this.width - 40);
 
-        addRenderableWidget(Button.builder(Component.literal("Mob AI Settings"), b ->
+        Button mobAiSettings = addRenderableWidget(Button.builder(Component.literal("Mob AI Settings"), b ->
             Minecraft.getInstance().setScreen(new AdaptiveMobAiMobAiSettingsScreen(this))
         ).bounds(centerX - w / 2, y, w, 20).build());
+        AdaptiveMobAiUiText.setTooltip(mobAiSettings, "config.adaptivemobai.tooltip.root.mob_ai_settings");
 
-        addRenderableWidget(Button.builder(Component.literal("Advanced Mob AI Settings"), b ->
+        Button advancedMobAiSettings = addRenderableWidget(Button.builder(Component.literal("Advanced Mob AI Settings"), b ->
             Minecraft.getInstance().setScreen(new AdaptiveMobAiAdvancedMobAiSettingsScreen(this))
         ).bounds(centerX - w / 2, y + 24, w, 20).build());
+        AdaptiveMobAiUiText.setTooltip(advancedMobAiSettings, "config.adaptivemobai.tooltip.root.advanced_mob_ai_settings");
 
-        addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
-            .bounds(centerX - w / 2, y + 60, w, 20)
+        Button disableLoadouts = addRenderableWidget(Button.builder(Component.literal("Disable Loadouts Globally"), b ->
+            AdaptiveMobAiLoadoutConfigScreen.disableLoadoutsGlobally()
+        ).bounds(centerX - w / 2, y + 48, w, 20).build());
+        AdaptiveMobAiUiText.setTooltip(disableLoadouts, "config.adaptivemobai.tooltip.root.disable_loadouts_globally");
+
+        Button done = addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
+            .bounds(centerX - w / 2, y + 84, w, 20)
             .build());
+        AdaptiveMobAiUiText.setTooltip(done, "config.adaptivemobai.tooltip.common.done");
     }
 
     @Override

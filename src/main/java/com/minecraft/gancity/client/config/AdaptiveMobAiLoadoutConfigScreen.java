@@ -106,22 +106,31 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
         int fieldW = Math.min(300, this.width - rightX - 12);
 
         int step = rowH + gap;
-        weapon1 = addRenderableWidget(Button.builder(Component.literal("Weapon 1: (empty)"), b -> pickWeapon(0)).bounds(rightX, rowY, fieldW, rowH).build());
-        weapon2 = addRenderableWidget(Button.builder(Component.literal("Weapon 2: (empty)"), b -> pickWeapon(1)).bounds(rightX, rowY + step, fieldW, rowH).build());
-        weapon3 = addRenderableWidget(Button.builder(Component.literal("Weapon 3: (empty)"), b -> pickWeapon(2)).bounds(rightX, rowY + step * 2, fieldW, rowH).build());
-        weapon4 = addRenderableWidget(Button.builder(Component.literal("Weapon 4: (empty)"), b -> pickWeapon(3)).bounds(rightX, rowY + step * 3, fieldW, rowH).build());
-        weapon5 = addRenderableWidget(Button.builder(Component.literal("Weapon 5: (empty)"), b -> pickWeapon(4)).bounds(rightX, rowY + step * 4, fieldW, rowH).build());
+        weapon1 = addRenderableWidget(Button.builder(Component.literal("Weapon 1: (learned)"), b -> pickWeapon(0)).bounds(rightX, rowY, fieldW, rowH).build());
+        weapon2 = addRenderableWidget(Button.builder(Component.literal("Weapon 2: (learned)"), b -> pickWeapon(1)).bounds(rightX, rowY + step, fieldW, rowH).build());
+        weapon3 = addRenderableWidget(Button.builder(Component.literal("Weapon 3: (learned)"), b -> pickWeapon(2)).bounds(rightX, rowY + step * 2, fieldW, rowH).build());
+        weapon4 = addRenderableWidget(Button.builder(Component.literal("Weapon 4: (learned)"), b -> pickWeapon(3)).bounds(rightX, rowY + step * 3, fieldW, rowH).build());
+        weapon5 = addRenderableWidget(Button.builder(Component.literal("Weapon 5: (learned)"), b -> pickWeapon(4)).bounds(rightX, rowY + step * 4, fieldW, rowH).build());
+        AdaptiveMobAiUiText.setTooltip(weapon1, "config.adaptivemobai.tooltip.loadouts.weapon_slot", 1);
+        AdaptiveMobAiUiText.setTooltip(weapon2, "config.adaptivemobai.tooltip.loadouts.weapon_slot", 2);
+        AdaptiveMobAiUiText.setTooltip(weapon3, "config.adaptivemobai.tooltip.loadouts.weapon_slot", 3);
+        AdaptiveMobAiUiText.setTooltip(weapon4, "config.adaptivemobai.tooltip.loadouts.weapon_slot", 4);
+        AdaptiveMobAiUiText.setTooltip(weapon5, "config.adaptivemobai.tooltip.loadouts.weapon_slot", 5);
 
         globalDefaultArrow = addRenderableWidget(Button.builder(Component.literal("Default Arrow: minecraft:arrow"), b -> pickGlobalDefaultArrow()).bounds(rightX, rowY + step * 5, fieldW, rowH).build());
         mobArrowOverride = addRenderableWidget(Button.builder(Component.literal("Mob Arrow Override: (default)"), b -> pickMobArrowOverride()).bounds(rightX, rowY + step * 6, fieldW, rowH).build());
+        AdaptiveMobAiUiText.setTooltip(globalDefaultArrow, "config.adaptivemobai.tooltip.loadouts.default_arrow");
+        AdaptiveMobAiUiText.setTooltip(mobArrowOverride, "config.adaptivemobai.tooltip.loadouts.mob_arrow_override");
 
-        addRenderableWidget(Button.builder(Component.literal("Save"), b -> saveAndClose())
+        Button save = addRenderableWidget(Button.builder(Component.literal("Save"), b -> saveAndClose())
             .bounds(rightX, bottomButtonsY, 100, 20)
             .build());
+        AdaptiveMobAiUiText.setTooltip(save, "config.adaptivemobai.tooltip.loadouts.save");
 
-        addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onClose())
+        Button cancel = addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onClose())
             .bounds(rightX + 110, bottomButtonsY, 100, 20)
             .build());
+        AdaptiveMobAiUiText.setTooltip(cancel, "config.adaptivemobai.tooltip.loadouts.cancel");
 
         // Preserve selection when returning from selector screens
         if (selectedMobId != null && allMobIds.contains(selectedMobId)) {
@@ -194,13 +203,7 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
         if (button == null) {
             return;
         }
-        String label;
-        if (value == null || value.isBlank()) {
-            label = "(empty)";
-        } else {
-            label = value;
-        }
-        button.setMessage(Component.literal("Weapon " + idx + ": " + label));
+        button.setMessage(Component.literal("Weapon " + idx + ": ").append(AdaptiveMobAiUiText.loadoutOptionLabel(value)));
     }
 
     private void pickWeapon(int slot) {
@@ -210,19 +213,20 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
 
         MobLoadout mobLoadout = loadouts.computeIfAbsent(selectedMobId, k -> MobLoadout.empty());
         List<String> options = new ArrayList<>();
-        options.add("(empty)");
+        options.add("(learned)");
         options.add("default");
         options.add("none");
         options.addAll(allWeaponItemIds);
 
         String current = mobLoadout.weapons.get(slot);
-        String currentDisplay = (current == null || current.isBlank()) ? "(empty)" : current;
+        String currentDisplay = (current == null || current.isBlank()) ? "(learned)" : current;
 
         Minecraft.getInstance().setScreen(new StringSelectScreen(
             this,
             Component.literal("Select Weapon (slot " + (slot + 1) + ")"),
             options,
             currentDisplay,
+            AdaptiveMobAiUiText::loadoutOptionLabel,
             selected -> {
                 String normalized = normalizeSelection(selected);
                 mobLoadout.weapons.set(slot, normalized);
@@ -365,7 +369,7 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
         if (s.isEmpty()) {
             return "";
         }
-        if (s.equalsIgnoreCase("(empty)") || s.equalsIgnoreCase("(default)")) {
+        if (s.equalsIgnoreCase("(empty)") || s.equalsIgnoreCase("(learned)") || s.equalsIgnoreCase("(default)")) {
             return "";
         }
         if (s.equalsIgnoreCase("default") || s.equalsIgnoreCase("preserve")) {
@@ -478,8 +482,49 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
         }
     }
 
+    public static void disableLoadoutsGlobally() {
+        try {
+            Path configPath = getConfigPath();
+            Files.createDirectories(configPath.getParent());
+
+            String defaultArrow = "minecraft:arrow";
+            if (Files.exists(configPath)) {
+                try {
+                    defaultArrow = TomlLoadouts.read(configPath).defaultArrowId;
+                } catch (IOException ignored) {
+                    defaultArrow = "minecraft:arrow";
+                }
+            }
+
+            Map<String, List<String>> mobWeapons = new LinkedHashMap<>();
+            for (String mobId : buildGlobalDefaultMobIdList()) {
+                mobWeapons.put(mobId, List.of("default"));
+            }
+
+            TomlLoadouts.write(configPath, mobWeapons, defaultArrow, Map.of());
+            GANCityMod.reloadLoadoutsFromDisk();
+        } catch (Exception e) {
+            GANCityMod.LOGGER.warn("Failed to disable loadouts globally: {}", e.toString());
+        }
+    }
+
     private static Path getConfigPath() {
         return FMLPaths.CONFIGDIR.get().resolve(CONFIG_FILE_NAME);
+    }
+
+    private static List<String> buildGlobalDefaultMobIdList() {
+        try {
+            return ForgeRegistries.ENTITY_TYPES.getKeys().stream()
+                .sorted()
+                .filter(key -> {
+                    EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(key);
+                    return type != null && type.getCategory() != MobCategory.MISC;
+                })
+                .map(ResourceLocation::toString)
+                .toList();
+        } catch (Throwable ignored) {
+            return List.of();
+        }
     }
 
     private static final class MobLoadout {
