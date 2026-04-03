@@ -20,7 +20,7 @@ import org.slf4j.Logger;
  * - Swimming/climbing optimization
  * - Parkour-style movement
  */
-@SuppressWarnings({"null", "unused"})
+@SuppressWarnings("null")
 public class PreciseMovement extends MoveControl {
     private static final Logger LOGGER = LogUtils.getLogger();
     
