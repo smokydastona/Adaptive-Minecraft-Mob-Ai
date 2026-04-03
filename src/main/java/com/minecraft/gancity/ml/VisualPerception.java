@@ -15,7 +15,6 @@ import java.util.*;
  * Visual perception system - mobs recognize player equipment and tactics
  * Adapts strategy based on what player is wearing/holding
  */
-@SuppressWarnings({"null", "unused"})
 public class VisualPerception {
     
     private final Map<String, PlayerProfile> playerProfiles = new HashMap<>();
@@ -52,7 +51,7 @@ public class VisualPerception {
         ItemStack boots = player.getItemBySlot(EquipmentSlot.FEET);
         
         state.armorLevel = calculateArmorLevel(helmet, chest, legs, boots);
-        state.hasShield = player.getOffhandItem().is(Items.SHIELD);
+        state.hasShield = isItem(player.getOffhandItem(), Items.SHIELD);
         
         // Curios API integration - check for trinkets/baubles
         if (ModCompatibility.isCuriosLoaded()) {
@@ -156,8 +155,8 @@ public class VisualPerception {
         PlayerProfile profile = playerProfiles.computeIfAbsent(playerId, k -> new PlayerProfile());
         
         profile.encounterCount++;
-        profile.preferredWeapon = state.weaponType;
-        profile.commonActions.merge(playerAction, 1, Integer::sum);
+        int actionCount = profile.commonActions.getOrDefault(playerAction, 0);
+        profile.commonActions.put(playerAction, actionCount + 1);
         
         // Detect patterns
         if (state.isSprinting) {
@@ -196,25 +195,25 @@ public class VisualPerception {
         for (ItemStack piece : armor) {
             if (piece.isEmpty()) continue;
             
-            if (piece.is(Items.NETHERITE_HELMET) || piece.is(Items.DIAMOND_HELMET)) totalProtection += 3;
-            else if (piece.is(Items.IRON_HELMET) || piece.is(Items.GOLDEN_HELMET)) totalProtection += 2;
+            if (isItem(piece, Items.NETHERITE_HELMET) || isItem(piece, Items.DIAMOND_HELMET)) totalProtection += 3;
+            else if (isItem(piece, Items.IRON_HELMET) || isItem(piece, Items.GOLDEN_HELMET)) totalProtection += 2;
             
-            if (piece.is(Items.NETHERITE_CHESTPLATE) || piece.is(Items.DIAMOND_CHESTPLATE)) totalProtection += 8;
-            else if (piece.is(Items.IRON_CHESTPLATE)) totalProtection += 6;
+            if (isItem(piece, Items.NETHERITE_CHESTPLATE) || isItem(piece, Items.DIAMOND_CHESTPLATE)) totalProtection += 8;
+            else if (isItem(piece, Items.IRON_CHESTPLATE)) totalProtection += 6;
             
-            if (piece.is(Items.NETHERITE_LEGGINGS) || piece.is(Items.DIAMOND_LEGGINGS)) totalProtection += 6;
-            else if (piece.is(Items.IRON_LEGGINGS)) totalProtection += 5;
+            if (isItem(piece, Items.NETHERITE_LEGGINGS) || isItem(piece, Items.DIAMOND_LEGGINGS)) totalProtection += 6;
+            else if (isItem(piece, Items.IRON_LEGGINGS)) totalProtection += 5;
             
-            if (piece.is(Items.NETHERITE_BOOTS) || piece.is(Items.DIAMOND_BOOTS)) totalProtection += 3;
-            else if (piece.is(Items.IRON_BOOTS)) totalProtection += 2;
+            if (isItem(piece, Items.NETHERITE_BOOTS) || isItem(piece, Items.DIAMOND_BOOTS)) totalProtection += 3;
+            else if (isItem(piece, Items.IRON_BOOTS)) totalProtection += 2;
         }
         
         return (float) totalProtection / maxProtection;
     }
     
     private String determineWeaponType(ItemStack weapon) {
-        if (weapon.is(Items.BOW) || weapon.is(Items.CROSSBOW)) return "ranged";
-        if (weapon.is(Items.TRIDENT)) return "throwable";
+        if (isItem(weapon, Items.BOW) || isItem(weapon, Items.CROSSBOW)) return "ranged";
+        if (isItem(weapon, Items.TRIDENT)) return "throwable";
         if (weapon.getItem().toString().contains("sword") || 
             weapon.getItem().toString().contains("axe")) return "melee";
         return "unarmed";
@@ -231,7 +230,11 @@ public class VisualPerception {
     }
     
     private boolean isRangedWeapon(ItemStack weapon) {
-        return weapon.is(Items.BOW) || weapon.is(Items.CROSSBOW);
+        return isItem(weapon, Items.BOW) || isItem(weapon, Items.CROSSBOW);
+    }
+
+    private boolean isItem(ItemStack stack, net.minecraft.world.item.Item item) {
+        return stack.is(Objects.requireNonNull(item, "item"));
     }
     
     public static class VisualState {
@@ -273,8 +276,6 @@ public class VisualPerception {
     
     private static class PlayerProfile {
         int encounterCount = 0;
-        @SuppressWarnings("unused")
-        String preferredWeapon = "unknown";
         Map<String, Integer> commonActions = new HashMap<>();
         int aggressiveStyle = 0;
         int cautiousStyle = 0;
