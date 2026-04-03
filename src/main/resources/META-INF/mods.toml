@@ -6,12 +6,12 @@ issueTrackerURL="https://github.com/BluShine/Minecraft-GAN-City-Generator/issues
 [[mods]]
 modId="adaptivemobai"
 version="${file.jarVersion}"
-displayName="MCA AI Enhanced - Intelligent Villagers & Mobs"
+displayName="Adaptive Mob AI"
 logoFile="logo.png"
 credits="Original concept by BluShine"
 authors="MCA AI Team"
 description='''
-An MCA Reborn addon that uses machine learning to enhance mob AI and villager behavior.
+Adaptive Mob AI uses machine learning to enhance mob AI and villager behavior.
 Features adaptive combat AI, dynamic dialogue generation, and personality learning.
 Powered by Deep Java Library (DJL) for AI inference.
 '''
