@@ -4,7 +4,7 @@
   "config.adaptivemobai.option.loadout.none": "none: force unarmed",
   "config.adaptivemobai.tooltip.root.mob_ai_settings": "Open per-mob settings for vanilla mobs. Pick a mob, then adjust AI and loadout behavior.",
   "config.adaptivemobai.tooltip.root.advanced_mob_ai_settings": "Open settings for modded mobs. Review auto-assigned tactic profiles and per-mob overrides here.",
-  "config.adaptivemobai.tooltip.root.disable_loadouts_globally": "Set every mob loadout to default so mobs keep their vanilla equipment. This updates the loadout config and reloads it immediately.",
+  "config.adaptivemobai.tooltip.root.disable_loadouts_globally": "Toggle all global weapon loadouts on or off. OFF keeps the normal Adaptive Mob AI loadout rules. ON makes mobs keep their vanilla equipment. This setting is off by default and reloads immediately.",
   "config.adaptivemobai.tooltip.common.done": "Close this menu.",
   "config.adaptivemobai.tooltip.common.back": "Return to the previous config page.",
   "config.adaptivemobai.tooltip.common.save": "Save the current edits to disk.",

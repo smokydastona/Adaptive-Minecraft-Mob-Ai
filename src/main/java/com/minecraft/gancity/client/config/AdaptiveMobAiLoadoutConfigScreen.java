@@ -63,6 +63,7 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
     private String mobSearchQuery = "";
 
     private final Map<String, MobLoadout> loadouts = new HashMap<>();
+    private boolean globalLoadoutsDisabled;
     private String defaultArrowId = "minecraft:arrow";
 
     public AdaptiveMobAiLoadoutConfigScreen(Screen parent) {
@@ -311,6 +312,7 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
 
         try {
             TomlLoadouts parsed = TomlLoadouts.read(configPath);
+            globalLoadoutsDisabled = parsed.globalLoadoutsDisabled;
             defaultArrowId = parsed.defaultArrowId;
 
             loadouts.clear();
@@ -358,7 +360,7 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
             }
         }
 
-        TomlLoadouts.write(configPath, mobWeapons, defaultArrowId, mobArrowOverrides);
+        TomlLoadouts.write(configPath, mobWeapons, globalLoadoutsDisabled, defaultArrowId, mobArrowOverrides);
     }
 
     private static String normalizeSelection(String selected) {
@@ -482,49 +484,48 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
         }
     }
 
-    public static void disableLoadoutsGlobally() {
+    public static boolean isGlobalLoadoutsDisabled() {
+        try {
+            Path configPath = getConfigPath();
+            if (!Files.exists(configPath)) {
+                return false;
+            }
+            return TomlLoadouts.read(configPath).globalLoadoutsDisabled;
+        } catch (Exception e) {
+            GANCityMod.LOGGER.warn("Failed to read global loadout toggle: {}", e.toString());
+            return false;
+        }
+    }
+
+    public static boolean toggleGlobalLoadoutsDisabled() {
+        boolean next = !isGlobalLoadoutsDisabled();
+        setGlobalLoadoutsDisabled(next);
+        return next;
+    }
+
+    public static void setGlobalLoadoutsDisabled(boolean disabled) {
         try {
             Path configPath = getConfigPath();
             Files.createDirectories(configPath.getParent());
 
+            TomlLoadouts parsed = Files.exists(configPath)
+                ? TomlLoadouts.read(configPath)
+                : new TomlLoadouts(Map.of(), false, "minecraft:arrow", Map.of());
+
             String defaultArrow = "minecraft:arrow";
-            if (Files.exists(configPath)) {
-                try {
-                    defaultArrow = TomlLoadouts.read(configPath).defaultArrowId;
-                } catch (IOException ignored) {
-                    defaultArrow = "minecraft:arrow";
-                }
+            if (parsed.defaultArrowId != null && !parsed.defaultArrowId.isBlank()) {
+                defaultArrow = parsed.defaultArrowId;
             }
 
-            Map<String, List<String>> mobWeapons = new LinkedHashMap<>();
-            for (String mobId : buildGlobalDefaultMobIdList()) {
-                mobWeapons.put(mobId, List.of("default"));
-            }
-
-            TomlLoadouts.write(configPath, mobWeapons, defaultArrow, Map.of());
+            TomlLoadouts.write(configPath, parsed.mobWeapons, disabled, defaultArrow, parsed.mobArrowOverrides);
             GANCityMod.reloadLoadoutsFromDisk();
         } catch (Exception e) {
-            GANCityMod.LOGGER.warn("Failed to disable loadouts globally: {}", e.toString());
+            GANCityMod.LOGGER.warn("Failed to update global loadout toggle: {}", e.toString());
         }
     }
 
     private static Path getConfigPath() {
         return FMLPaths.CONFIGDIR.get().resolve(CONFIG_FILE_NAME);
-    }
-
-    private static List<String> buildGlobalDefaultMobIdList() {
-        try {
-            return ForgeRegistries.ENTITY_TYPES.getKeys().stream()
-                .sorted()
-                .filter(key -> {
-                    EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(key);
-                    return type != null && type.getCategory() != MobCategory.MISC;
-                })
-                .map(ResourceLocation::toString)
-                .toList();
-        } catch (Throwable ignored) {
-            return List.of();
-        }
     }
 
     private static final class MobLoadout {
@@ -592,11 +593,13 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
 
     private static final class TomlLoadouts {
         final Map<String, List<String>> mobWeapons;
+        final boolean globalLoadoutsDisabled;
         final String defaultArrowId;
         final Map<String, String> mobArrowOverrides;
 
-        private TomlLoadouts(Map<String, List<String>> mobWeapons, String defaultArrowId, Map<String, String> mobArrowOverrides) {
+        private TomlLoadouts(Map<String, List<String>> mobWeapons, boolean globalLoadoutsDisabled, String defaultArrowId, Map<String, String> mobArrowOverrides) {
             this.mobWeapons = mobWeapons;
+            this.globalLoadoutsDisabled = globalLoadoutsDisabled;
             this.defaultArrowId = defaultArrowId;
             this.mobArrowOverrides = mobArrowOverrides;
         }
@@ -625,6 +628,7 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
 
             List<String> loadouts = parseStringList(kv.get("mobWeaponLoadouts"));
             Map<String, List<String>> mobWeapons = parseMobWeaponLoadouts(loadouts);
+            boolean globalLoadoutsDisabled = parseBoolean(kv.get("disableLoadoutsGlobally"), false);
 
             String defaultArrow = stripQuotes(Optional.ofNullable(kv.get("defaultBowArrowItem")).orElse("\"minecraft:arrow\"")).trim();
             if (defaultArrow.isEmpty()) {
@@ -634,10 +638,10 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
             List<String> arrowOverrides = parseStringList(kv.get("mobBowArrowOverrides"));
             Map<String, String> mobArrows = parseKeyValueMap(arrowOverrides);
 
-            return new TomlLoadouts(mobWeapons, defaultArrow, mobArrows);
+            return new TomlLoadouts(mobWeapons, globalLoadoutsDisabled, defaultArrow, mobArrows);
         }
 
-        static void write(Path path, Map<String, List<String>> mobWeapons, String defaultArrowId, Map<String, String> mobArrowOverrides) throws IOException {
+        static void write(Path path, Map<String, List<String>> mobWeapons, boolean globalLoadoutsDisabled, String defaultArrowId, Map<String, String> mobArrowOverrides) throws IOException {
             List<String> lines = Files.exists(path) ? Files.readAllLines(path) : new ArrayList<>();
 
             int start = findSectionStart(lines, "[loadouts]");
@@ -650,10 +654,10 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
                         lines.add("");
                     }
                 }
-                lines.addAll(insertAt, buildLoadoutsBlock(mobWeapons, defaultArrowId, mobArrowOverrides));
+                lines.addAll(insertAt, buildLoadoutsBlock(mobWeapons, globalLoadoutsDisabled, defaultArrowId, mobArrowOverrides));
             } else {
                 int end = findSectionEnd(lines, start);
-                List<String> block = buildLoadoutsBlock(mobWeapons, defaultArrowId, mobArrowOverrides);
+                List<String> block = buildLoadoutsBlock(mobWeapons, globalLoadoutsDisabled, defaultArrowId, mobArrowOverrides);
                 lines.subList(start, end).clear();
                 lines.addAll(start, block);
             }
@@ -684,9 +688,10 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
             return lines.size();
         }
 
-        private static List<String> buildLoadoutsBlock(Map<String, List<String>> mobWeapons, String defaultArrowId, Map<String, String> mobArrowOverrides) {
+        private static List<String> buildLoadoutsBlock(Map<String, List<String>> mobWeapons, boolean globalLoadoutsDisabled, String defaultArrowId, Map<String, String> mobArrowOverrides) {
             List<String> out = new ArrayList<>();
             out.add("[loadouts]");
+            out.add("disableLoadoutsGlobally = " + globalLoadoutsDisabled);
 
             List<String> entries = mobWeapons.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
@@ -710,6 +715,20 @@ public final class AdaptiveMobAiLoadoutConfigScreen extends Screen {
             out.add("");
 
             return out;
+        }
+
+        private static boolean parseBoolean(String raw, boolean defaultValue) {
+            if (raw == null) {
+                return defaultValue;
+            }
+            String normalized = stripQuotes(raw).trim();
+            if (normalized.equalsIgnoreCase("true")) {
+                return true;
+            }
+            if (normalized.equalsIgnoreCase("false")) {
+                return false;
+            }
+            return defaultValue;
         }
 
         private static String quote(String s) {

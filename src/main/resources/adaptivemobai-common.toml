@@ -43,6 +43,8 @@
 	#
 	# These loadouts apply to all players on the server.
 	# If you also use /amai loadout (player-specific JSON loadouts), the player-specific rules take priority.
+	# Set this to true to disable the global loadout system and keep vanilla mob equipment instead.
+	disableLoadoutsGlobally = false
 	#
 	# Format (up to 5 weapons):
 	# mobWeaponLoadouts = ["<mobId>=<weapon1>,<weapon2>,<weapon3>,<weapon4>,<weapon5>"]

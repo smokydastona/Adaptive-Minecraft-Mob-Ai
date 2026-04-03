@@ -96,6 +96,7 @@ public class GANCityMod {
     // Global (server-wide) mob weapon loadouts from config
     // Format: mobTypeId -> up to 5 weapon item ids (including "none")
     private static volatile Map<String, List<String>> globalMobWeaponLoadouts = Map.of();
+    private static volatile boolean globalLoadoutsDisabled = false;
 
     // Global arrows for bow/crossbow weapons
     private static volatile String defaultBowArrowItemId = "minecraft:arrow";
@@ -241,6 +242,7 @@ public class GANCityMod {
         syncTiersWithFederation = COMMON.syncTiersWithFederation.get();
 
         // Loadouts
+        globalLoadoutsDisabled = COMMON.disableLoadoutsGlobally.get();
         globalMobWeaponLoadouts = parseMobWeaponLoadouts(COMMON.mobWeaponLoadouts.get(), 5);
         defaultBowArrowItemId = normalizeItemId(COMMON.defaultBowArrowItem.get(), "minecraft:arrow", true);
         bowArrowOverrides = parseKeyValueMap(COMMON.mobBowArrowOverrides.get());
@@ -383,6 +385,9 @@ public class GANCityMod {
         if (mobTypeId == null || mobTypeId.isBlank()) {
             return PlayerMobLoadoutStore.WeaponDecision.noOverride();
         }
+        if (globalLoadoutsDisabled) {
+            return PlayerMobLoadoutStore.WeaponDecision.preserve();
+        }
 
         List<String> options = globalMobWeaponLoadouts.get(mobTypeId);
         if (options == null || options.isEmpty()) {
@@ -437,6 +442,9 @@ public class GANCityMod {
 
     public static ItemStack getConfiguredArrowStackForMob(String mobTypeId) {
         loadConfigIfNeeded();
+        if (globalLoadoutsDisabled) {
+            return ItemStack.EMPTY;
+        }
 
         String arrowId = null;
         if (mobTypeId != null && !mobTypeId.isBlank()) {
@@ -481,11 +489,13 @@ public class GANCityMod {
             }
 
             Map<String, String> kv = parseTomlKeyValues(configPath);
+            globalLoadoutsDisabled = parseBooleanString(kv.get("disableLoadoutsGlobally"), false);
             globalMobWeaponLoadouts = parseMobWeaponLoadouts(parseTomlStringListValue(kv.get("mobWeaponLoadouts")), 5);
             defaultBowArrowItemId = normalizeItemId(stripQuotes(kv.getOrDefault("defaultBowArrowItem", "\"minecraft:arrow\"")), "minecraft:arrow", true);
             bowArrowOverrides = parseKeyValueMap(parseTomlStringListValue(kv.get("mobBowArrowOverrides")));
 
             // Also update the ForgeConfigSpec values (so a later applyForgeConfig() stays consistent)
+            COMMON.disableLoadoutsGlobally.set(globalLoadoutsDisabled);
             List<String> weaponEntries = globalMobWeaponLoadouts.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(e -> e.getKey() + "=" + String.join(",", e.getValue()))
@@ -654,6 +664,20 @@ public class GANCityMod {
         }
 
         return result.isEmpty() ? Map.of() : Collections.unmodifiableMap(result);
+    }
+
+    private static boolean parseBooleanString(String raw, boolean fallback) {
+        if (raw == null) {
+            return fallback;
+        }
+        String normalized = stripQuotes(raw).trim();
+        if (normalized.equalsIgnoreCase("true")) {
+            return true;
+        }
+        if (normalized.equalsIgnoreCase("false")) {
+            return false;
+        }
+        return fallback;
     }
 
     private static Map<String, String> parseKeyValueMap(List<? extends String> rawEntries) {
@@ -988,6 +1012,7 @@ public class GANCityMod {
         final ForgeConfigSpec.DoubleValue experienceRateMultiplier;
         final ForgeConfigSpec.BooleanValue syncTiersWithFederation;
 
+        final ForgeConfigSpec.BooleanValue disableLoadoutsGlobally;
         final ForgeConfigSpec.ConfigValue<List<? extends String>> mobWeaponLoadouts;
         final ForgeConfigSpec.ConfigValue<String> defaultBowArrowItem;
         final ForgeConfigSpec.ConfigValue<List<? extends String>> mobBowArrowOverrides;
@@ -1046,6 +1071,9 @@ public class GANCityMod {
             builder.pop();
 
             builder.push("loadouts");
+            disableLoadoutsGlobally = builder
+                .comment("Disable all global weapon loadout overrides and keep mobs on their vanilla equipment.")
+                .define("disableLoadoutsGlobally", false);
             mobWeaponLoadouts = builder
                 .comment(
                     "Global per-mob weapon loadouts (server-wide).",

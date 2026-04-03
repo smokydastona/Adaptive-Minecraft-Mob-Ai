@@ -14,6 +14,7 @@ import net.minecraft.network.chat.Component;
 @SuppressWarnings("null")
 public final class AdaptiveMobAiConfigScreen extends Screen {
     private final Screen parent;
+    private Button disableLoadoutsToggle;
 
     public AdaptiveMobAiConfigScreen(Screen parent) {
         super(Component.literal("Adaptive Mob AI - Config"));
@@ -36,15 +37,21 @@ public final class AdaptiveMobAiConfigScreen extends Screen {
         ).bounds(centerX - w / 2, y + 24, w, 20).build());
         AdaptiveMobAiUiText.setTooltip(advancedMobAiSettings, "config.adaptivemobai.tooltip.root.advanced_mob_ai_settings");
 
-        Button disableLoadouts = addRenderableWidget(Button.builder(Component.literal("Disable Loadouts Globally"), b ->
-            AdaptiveMobAiLoadoutConfigScreen.disableLoadoutsGlobally()
-        ).bounds(centerX - w / 2, y + 48, w, 20).build());
-        AdaptiveMobAiUiText.setTooltip(disableLoadouts, "config.adaptivemobai.tooltip.root.disable_loadouts_globally");
+        boolean loadoutsDisabled = AdaptiveMobAiLoadoutConfigScreen.isGlobalLoadoutsDisabled();
+        disableLoadoutsToggle = addRenderableWidget(Button.builder(globalLoadoutsLabel(loadoutsDisabled), b -> {
+            boolean next = AdaptiveMobAiLoadoutConfigScreen.toggleGlobalLoadoutsDisabled();
+            b.setMessage(globalLoadoutsLabel(next));
+        }).bounds(centerX - w / 2, y + 48, w, 20).build());
+        AdaptiveMobAiUiText.setTooltip(disableLoadoutsToggle, "config.adaptivemobai.tooltip.root.disable_loadouts_globally");
 
         Button done = addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
             .bounds(centerX - w / 2, y + 84, w, 20)
             .build());
         AdaptiveMobAiUiText.setTooltip(done, "config.adaptivemobai.tooltip.common.done");
+    }
+
+    private static Component globalLoadoutsLabel(boolean disabled) {
+        return Component.literal("Disable Loadouts Globally: " + (disabled ? "ON" : "OFF"));
     }
 
     @Override
