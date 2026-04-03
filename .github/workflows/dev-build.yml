@@ -28,7 +28,7 @@ jobs:
 
     - name: Verify language files
       shell: pwsh
-      run: ./tools/verify_lang_files.ps1
+      run: ./tools/sync_lang_files.ps1
     
     - name: Get development version
       id: version
