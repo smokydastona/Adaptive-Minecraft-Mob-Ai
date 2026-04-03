@@ -46,7 +46,7 @@ jobs:
       run: ./gradlew build --no-daemon
     
     - name: Upload development build
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: mca-ai-enhanced-dev-${{ steps.version.outputs.VERSION }}
         path: build/libs/*.jar

@@ -86,7 +86,7 @@ jobs:
         git push origin HEAD:main || echo "No changes to push"
     
     - name: Upload Mod JAR
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: Adaptive-Mob-Ai-${{ steps.version.outputs.VERSION }}
         path: build/libs/*.jar
