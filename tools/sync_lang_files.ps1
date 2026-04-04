@@ -312,8 +312,8 @@ function Get-LocaleFailures {
             }
 
             $validationErrors = Get-TranslationValidationErrors -Locale $locale -EnglishEntries $englishEntries -LocalizedEntries $localeEntries
-            foreach ($error in $validationErrors) {
-                $issues.Add($error)
+            foreach ($validationError in $validationErrors) {
+                $issues.Add($validationError)
             }
         }
 
