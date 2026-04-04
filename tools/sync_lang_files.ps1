@@ -117,6 +117,16 @@ function ConvertTo-LangJson {
     return (ConvertTo-OrderedMap -Entries $Entries | ConvertTo-Json -Depth 4) + [Environment]::NewLine
 }
 
+function Normalize-LineEndings {
+    param([string]$Text)
+
+    if ($null -eq $Text) {
+        return $null
+    }
+
+    return (($Text -replace "`r`n", "`n") -replace "`r", "`n")
+}
+
 function Write-LangFile {
     param(
         [string]$Path,
@@ -305,8 +315,8 @@ function Get-LocaleFailures {
             }
 
             $expectedEntries = Get-SyncedEntries -EnglishEntries $englishEntries -ExistingObject $existingObject -Locale $locale
-            $expectedJson = ConvertTo-LangJson -Entries $expectedEntries
-            $actualJson = Get-Content -LiteralPath $localePath -Raw -Encoding UTF8
+            $expectedJson = Normalize-LineEndings -Text (ConvertTo-LangJson -Entries $expectedEntries)
+            $actualJson = Normalize-LineEndings -Text (Get-Content -LiteralPath $localePath -Raw -Encoding UTF8)
             if ($actualJson -ne $expectedJson) {
                 $issues.Add("File would be rewritten by tools/sync_lang_files.ps1.")
             }
