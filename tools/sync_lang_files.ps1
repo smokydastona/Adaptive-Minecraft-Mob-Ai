@@ -1,5 +1,6 @@
 param(
-    [switch]$Verify
+    [switch]$Verify,
+    [string]$ReportPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,6 +24,60 @@ $expectedLocales = @(
 $translationExemptLocales = @(
     'en_au','en_ca','en_gb','en_nz','en_pt','en_ud','en_us','enp','enws','lol_us'
 )
+
+$localeDonorFamilies = @{
+    'ast_es' = @('es_es','ca_es')
+    'ba_ru' = @('ru_ru','tt_ru')
+    'bar' = @('de_de','de_at')
+    'br_fr' = @('fr_fr','oc_fr')
+    'brb' = @('nl_nl','de_de')
+    'eo_uy' = @('eo_uy','es_es')
+    'esan' = @('es_es','es_mx')
+    'fil_ph' = @('tl_ph','id_id')
+    'fo_fo' = @('da_dk','nn_no')
+    'fra_de' = @('de_de','fr_fr')
+    'fur_it' = @('it_it','vec_it')
+    'fy_nl' = @('nl_nl','de_de')
+    'haw_us' = @('en_us','enp')
+    'io_en' = @('eo_uy','en_us')
+    'isv' = @('uk_ua','pl_pl','ru_ru')
+    'jbo_en' = @('eo_uy','la_la')
+    'ksh' = @('de_de','nl_nl')
+    'kw_gb' = @('cy_gb','en_gb')
+    'la_la' = @('it_it','fr_fr')
+    'lb_lu' = @('de_de','fr_fr','nl_nl')
+    'li_li' = @('nl_nl','de_de')
+    'lmo' = @('it_it','vec_it')
+    'lzh' = @('zh_tw','zh_cn')
+    'nah' = @('es_es','es_mx')
+    'nds_de' = @('de_de','nl_nl')
+    'nn_no' = @('no_no','da_dk')
+    'no_no' = @('nn_no','da_dk')
+    'oc_fr' = @('ca_es','fr_fr','es_es')
+    'ovd' = @('sv_se','no_no')
+    'pt_br' = @('pt_pt','es_es')
+    'pt_pt' = @('pt_br','es_es')
+    'qya_aa' = @('la_la','eo_uy')
+    'rpr' = @('ru_ru','uk_ua')
+    'ry_ua' = @('uk_ua','ru_ru')
+    'sah_sah' = @('ru_ru','tt_ru')
+    'se_no' = @('no_no','sv_se')
+    'sr_cs' = @('sr_sp','hr_hr')
+    'sr_sp' = @('sr_cs','hr_hr')
+    'sxu' = @('de_de','bar')
+    'szl' = @('pl_pl','cs_cz')
+    'tl_ph' = @('fil_ph','id_id')
+    'tlh_aa' = @('la_la','eo_uy')
+    'tok' = @('eo_uy','id_id','en_us')
+    'tt_ru' = @('ru_ru','ba_ru')
+    'val_es' = @('ca_es','es_es')
+    'vec_it' = @('it_it','fur_it')
+    'yi_de' = @('he_il','de_de','en_us')
+    'zh_cn' = @('zh_tw','ja_jp','ko_kr')
+    'zh_hk' = @('zh_tw','zh_cn')
+    'zh_tw' = @('zh_hk','zh_cn')
+    'zlm_arab' = @('ms_my','ar_sa')
+}
 
 function Read-LangObject {
     param([string]$Path)
@@ -155,6 +210,125 @@ function Get-TranslationValidationErrors {
     return @($errors | Select-Object -Unique)
 }
 
+function Get-LocaleDonorFamilies {
+    param([string]$Locale)
+
+    if ($localeDonorFamilies.ContainsKey($Locale)) {
+        return @($localeDonorFamilies[$Locale])
+    }
+
+    if ($translationExemptLocales -contains $Locale) {
+        return @('en_us')
+    }
+
+    if ($Locale -match '_') {
+        $languageCode = $Locale.Split('_')[0]
+        $sameFamily = @($expectedLocales | Where-Object { $_ -ne $Locale -and $_.StartsWith($languageCode + '_') })
+        if ($sameFamily.Count -gt 0) {
+            return $sameFamily
+        }
+    }
+
+    return @('en_us')
+}
+
+function Format-FailReport {
+    param(
+        [object[]]$Failures,
+        [string]$RepoLabel
+    )
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add("# Locale Gate Fail Report ($RepoLabel)")
+    $lines.Add('')
+    $lines.Add("Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss K')")
+    $lines.Add('')
+    $lines.Add("Failing locales: $($Failures.Count)")
+    $lines.Add('')
+
+    foreach ($failure in $Failures | Sort-Object Locale) {
+        $lines.Add("## $($failure.Locale)")
+        $lines.Add('')
+        $lines.Add("Suggested donor families: $($failure.DonorFamilies -join ', ')")
+        $lines.Add('')
+        foreach ($issue in $failure.Issues) {
+            $lines.Add("- $issue")
+        }
+        $lines.Add('')
+    }
+
+    return ($lines -join [Environment]::NewLine) + [Environment]::NewLine
+}
+
+function Get-LocaleFailures {
+    $failures = New-Object System.Collections.Generic.List[object]
+
+    $actualFiles = @(Get-ChildItem -LiteralPath $langDir -Filter '*.json' | Select-Object -ExpandProperty BaseName | Sort-Object)
+    $expectedFiles = @($expectedLocales | Sort-Object)
+    $missing = @($expectedFiles | Where-Object { $_ -notin $actualFiles })
+    $extra = @($actualFiles | Where-Object { $_ -notin $expectedFiles })
+
+    if ($missing.Count -gt 0 -or $extra.Count -gt 0) {
+        $issues = New-Object System.Collections.Generic.List[string]
+        if ($missing.Count -gt 0) {
+            $issues.Add("Missing locale files: $($missing -join ', ')")
+        }
+        if ($extra.Count -gt 0) {
+            $issues.Add("Unexpected locale files: $($extra -join ', ')")
+        }
+
+        $failures.Add([PSCustomObject]@{
+            Locale = 'locale-set'
+            DonorFamilies = @('en_us')
+            Issues = @($issues)
+        })
+    }
+
+    $englishPath = Join-Path $langDir ($sourceLocale + '.json')
+    $englishEntries = Get-OrderedEntries -Object (Read-LangObject -Path $englishPath)
+    $englishKeys = @($englishEntries | ForEach-Object { $_.Key })
+
+    foreach ($locale in $expectedLocales) {
+        $localePath = Join-Path $langDir ($locale + '.json')
+        $issues = New-Object System.Collections.Generic.List[string]
+
+        if (-not (Test-Path -LiteralPath $localePath)) {
+            $issues.Add("Missing locale file '$locale.json'.")
+        }
+        else {
+            $existingObject = Read-LangObject -Path $localePath
+            $localeEntries = Get-OrderedEntries -Object $existingObject
+            $localeKeys = @($localeEntries | ForEach-Object { $_.Key })
+
+            if (@(Compare-Object -ReferenceObject $englishKeys -DifferenceObject $localeKeys).Count -gt 0) {
+                $issues.Add("Key set does not match en_us.")
+            }
+
+            $expectedEntries = Get-SyncedEntries -EnglishEntries $englishEntries -ExistingObject $existingObject -Locale $locale
+            $expectedJson = ConvertTo-LangJson -Entries $expectedEntries
+            $actualJson = Get-Content -LiteralPath $localePath -Raw -Encoding UTF8
+            if ($actualJson -ne $expectedJson) {
+                $issues.Add("File would be rewritten by tools/sync_lang_files.ps1.")
+            }
+
+            $validationErrors = Get-TranslationValidationErrors -Locale $locale -EnglishEntries $englishEntries -LocalizedEntries $localeEntries
+            foreach ($error in $validationErrors) {
+                $issues.Add($error)
+            }
+        }
+
+        if ($issues.Count -gt 0) {
+            $failures.Add([PSCustomObject]@{
+                Locale = $locale
+                DonorFamilies = Get-LocaleDonorFamilies -Locale $locale
+                Issues = @($issues | Select-Object -Unique)
+            })
+        }
+    }
+
+    return @($failures.ToArray())
+}
+
 function Get-SyncedEntries {
     param(
         [object[]]$EnglishEntries,
@@ -211,33 +385,22 @@ function Sync-LangFiles {
 }
 
 function Test-LangFiles {
-    Assert-ExpectedLocaleSet
-
-    $englishPath = Join-Path $langDir ($sourceLocale + '.json')
-    $englishEntries = Get-OrderedEntries -Object (Read-LangObject -Path $englishPath)
-    $englishKeys = @($englishEntries | ForEach-Object { $_.Key })
-
-    foreach ($locale in $expectedLocales) {
-        $localePath = Join-Path $langDir ($locale + '.json')
-        $existingObject = Read-LangObject -Path $localePath
-        $localeEntries = Get-OrderedEntries -Object $existingObject
-        $localeKeys = @($localeEntries | ForEach-Object { $_.Key })
-
-        if (@(Compare-Object -ReferenceObject $englishKeys -DifferenceObject $localeKeys).Count -gt 0) {
-            throw "Locale '$locale' does not match the en_us key set."
+    $failures = Get-LocaleFailures
+    if ($ReportPath) {
+        $resolvedReportPath = if ([System.IO.Path]::IsPathRooted($ReportPath)) { $ReportPath } else { Join-Path $repoRoot $ReportPath }
+        $reportDirectory = Split-Path -Parent $resolvedReportPath
+        if ($reportDirectory -and -not (Test-Path -LiteralPath $reportDirectory)) {
+            New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
         }
 
-        $expectedEntries = Get-SyncedEntries -EnglishEntries $englishEntries -ExistingObject $existingObject -Locale $locale
-        $expectedJson = ConvertTo-LangJson -Entries $expectedEntries
-        $actualJson = Get-Content -LiteralPath $localePath -Raw -Encoding UTF8
-        if ($actualJson -ne $expectedJson) {
-            throw "Locale '$locale' is out of date with en_us and would be rewritten by tools/sync_lang_files.ps1."
-        }
+        $reportContent = Format-FailReport -Failures $failures -RepoLabel 'Forge'
+        [System.IO.File]::WriteAllText($resolvedReportPath, $reportContent, [System.Text.UTF8Encoding]::new($false))
+        Write-Host "Wrote locale fail report to $resolvedReportPath"
+    }
 
-        $validationErrors = Get-TranslationValidationErrors -Locale $locale -EnglishEntries $englishEntries -LocalizedEntries $localeEntries
-        if ($validationErrors.Count -gt 0) {
-            throw "Locale '$locale' failed quality checks: $($validationErrors -join ' ')"
-        }
+    if ($failures.Count -gt 0) {
+        $summary = @($failures | ForEach-Object { "$($_.Locale): $($_.Issues.Count) issue(s)" }) -join '; '
+        throw "Language gate failed for $($failures.Count) locale target(s): $summary"
     }
 
     Write-Host 'Forge language file verification passed.'

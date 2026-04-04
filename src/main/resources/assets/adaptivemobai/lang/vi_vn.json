@@ -1,8 +1,8 @@
 {
-    "config.adaptivemobai.option.loadout.empty":  "đ",
-    "config.adaptivemobai.option.loadout.default":  "m",
-    "config.adaptivemobai.option.loadout.none":  "k",
-    "config.adaptivemobai.tooltip.root.mob_ai_settings":  "M",
+    "config.adaptivemobai.option.loadout.empty":  "đã học: sử dụng nhóm vũ khí đã học của mod",
+    "config.adaptivemobai.option.loadout.default":  "mặc định: giữ lại vũ khí hiện có của mob",
+    "config.adaptivemobai.option.loadout.none":  "không có: buộc không mang vũ khí",
+    "config.adaptivemobai.tooltip.root.mob_ai_settings":  "Mở cài đặt theo từng mob cho mob vanilla. Chọn một mob rồi điều chỉnh AI và hành vi trang bị.",
     "config.adaptivemobai.tooltip.root.advanced_mob_ai_settings":  "Mở cài đặt cho mob đã mod. Xem lại hồ sơ chiến thuật được tự động chỉ định và ghi đè theo từng mob tại đây.",
     "config.adaptivemobai.tooltip.root.disable_loadouts_globally":  "Bật hoặc tắt tất cả các chế độ nạp vũ khí toàn cầu. TẮT giữ nguyên các quy tắc tải AI Mob thích ứng thông thường. BẬT khiến mob giữ lại trang bị cơ bản của họ. Cài đặt này được tắt theo mặc định và tải lại ngay lập tức.",
     "config.adaptivemobai.tooltip.common.done":  "Đóng menu này.",
