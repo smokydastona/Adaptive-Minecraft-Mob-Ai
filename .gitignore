@@ -3,6 +3,7 @@ image_at_*
 
 .vs
 .vscode
+.settings/
 
 # Gradle / IDE build outputs
 .gradle/
