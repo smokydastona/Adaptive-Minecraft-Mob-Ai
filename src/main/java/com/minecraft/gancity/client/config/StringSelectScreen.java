@@ -68,6 +68,12 @@ public final class StringSelectScreen extends Screen {
     }
 
     @Override
+    public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        AdaptiveMobAiUiText.renderScreenBackground(this, graphics);
+        super.render(graphics, mouseX, mouseY, partialTick);
+    }
+
+    @Override
     public void onClose() {
         Minecraft.getInstance().setScreen(parent);
     }

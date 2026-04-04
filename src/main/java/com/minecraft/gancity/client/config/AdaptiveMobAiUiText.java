@@ -2,6 +2,8 @@ package com.minecraft.gancity.client.config;
 
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
 
@@ -21,6 +23,12 @@ final class AdaptiveMobAiUiText {
     static void setTooltip(Button button, String key, Object... args) {
         if (button != null) {
             button.setTooltip(Tooltip.create(tr(key, args)));
+        }
+    }
+
+    static void renderScreenBackground(Screen screen, GuiGraphics graphics) {
+        if (screen != null && graphics != null) {
+            screen.renderBackground(graphics);
         }
     }
 
