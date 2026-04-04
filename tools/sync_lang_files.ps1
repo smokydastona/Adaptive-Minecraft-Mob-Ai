@@ -117,16 +117,6 @@ function ConvertTo-LangJson {
     return (ConvertTo-OrderedMap -Entries $Entries | ConvertTo-Json -Depth 4) + [Environment]::NewLine
 }
 
-function ConvertTo-NormalizedLineEndings {
-    param([string]$Text)
-
-    if ($null -eq $Text) {
-        return $null
-    }
-
-    return (($Text -replace "`r`n", "`n") -replace "`r", "`n")
-}
-
 function Write-LangFile {
     param(
         [string]$Path,
@@ -134,6 +124,29 @@ function Write-LangFile {
     )
 
     [System.IO.File]::WriteAllText($Path, (ConvertTo-LangJson -Entries $Entries), [System.Text.UTF8Encoding]::new($false))
+}
+
+function Test-EntriesMatch {
+    param(
+        [object[]]$ExpectedEntries,
+        [object[]]$ActualEntries
+    )
+
+    if ($ExpectedEntries.Count -ne $ActualEntries.Count) {
+        return $false
+    }
+
+    for ($index = 0; $index -lt $ExpectedEntries.Count; $index++) {
+        if ($ExpectedEntries[$index].Key -cne $ActualEntries[$index].Key) {
+            return $false
+        }
+
+        if ([string]$ExpectedEntries[$index].Value -cne [string]$ActualEntries[$index].Value) {
+            return $false
+        }
+    }
+
+    return $true
 }
 
 function Get-PlaceholderCount {
@@ -315,9 +328,7 @@ function Get-LocaleFailures {
             }
 
             $expectedEntries = Get-SyncedEntries -EnglishEntries $englishEntries -ExistingObject $existingObject -Locale $locale
-            $expectedJson = ConvertTo-NormalizedLineEndings -Text (ConvertTo-LangJson -Entries $expectedEntries)
-            $actualJson = ConvertTo-NormalizedLineEndings -Text (Get-Content -LiteralPath $localePath -Raw -Encoding UTF8)
-            if ($actualJson -ne $expectedJson) {
+            if (-not (Test-EntriesMatch -ExpectedEntries $expectedEntries -ActualEntries $localeEntries)) {
                 $issues.Add("File would be rewritten by tools/sync_lang_files.ps1.")
             }
 
