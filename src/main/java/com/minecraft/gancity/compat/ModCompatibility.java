@@ -146,7 +146,7 @@ public class ModCompatibility {
         report.append("\n");
         
         appendModStatus(report, "Curios API", curiosLoaded, 
-            "Enhanced equipment detection in visual perception system");
+            "Basic curio inventory detection for combat heuristics");
         appendModStatus(report, "FTB Teams", ftbTeamsLoaded,
             "Multi-player team coordination for mob AI");
         appendModStatus(report, "Just Enough Items", jeiLoaded,

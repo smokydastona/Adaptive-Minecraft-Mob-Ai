@@ -789,10 +789,10 @@ public class GANCityMod {
     
     @SubscribeEvent
     public void onServerStopping(ServerStoppingEvent event) {
-        LOGGER.info("MCA AI Enhanced - Server stopping, saving ML models...");
+        LOGGER.info("MCA AI Enhanced - Server stopping, flushing AI services...");
         
         if (mobBehaviorAI != null) {
-            mobBehaviorAI.saveModel();
+            mobBehaviorAI.shutdown();
         }
     }
     

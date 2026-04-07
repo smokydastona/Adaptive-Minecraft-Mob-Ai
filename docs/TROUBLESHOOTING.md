@@ -110,14 +110,12 @@ Mod continues working with local-only learning. No action needed.
 
 **B. Check API Status**:
 ```
-/mcaai federation status
+/amai status
 ```
 If shows "❌ Offline", API is down. Wait for fix.
 
 **C. Manual Retry**:
-```
-/mcaai federation sync
-```
+There is no manual federation sync command in the current command surface. Use `/amai status` to verify connectivity and restart the server if you need to force a fresh bootstrap pull.
 
 **D. Disable Federation** (if persistent issues):
 Edit `config/adaptivemobai-common.toml`:
@@ -137,7 +135,7 @@ enabled = false
 - Dragons are skipped by tier assignment system
 - Check detection working:
   ```
-  /mcaai info
+  /amai info
   ```
   Should show: `Ice and Fire detected - skipping dragons`
 
@@ -148,7 +146,7 @@ enabled = false
 - Stat modifiers reduced 50% when PMMO detected
 - Verify:
   ```
-  /mcaai info
+  /amai info
   ```
   Should show: `PMMO detected - reducing stat modifiers`
 
@@ -177,17 +175,12 @@ enabled = false
 
 **Fixes**:
 
-**A. Verify Cache Working**:
+**A. Verify Runtime State**:
+Use:
 ```
-/mcaai debug performance
+/amai stats
 ```
-Expected output:
-```
-Cache hit rate: >75%
-Training overhead: <2% TPS
-```
-
-If cache hit rate <50%, report bug.
+Then compare against `logs/latest.log` for repeated training or Cloudflare warnings.
 
 **B. Reduce Training Frequency**:
 Edit `PerformanceOptimizer.java` (requires recompile):
@@ -239,20 +232,17 @@ Verify folder exists and is writable.
 chmod -R 755 world/data/adaptivemobai/
 ```
 
-**C. Validate JSON** (if suspect corruption):
-```
-/mcaai debug validate-saves
-```
-Checks all tactic files for corruption.
+**C. Validate Saved Data**:
+Inspect `world/data/adaptivemobai/` and review `logs/latest.log` for JSON parse or save errors during startup and shutdown.
 
 **D. Manual Backup**:
 Copy `world/data/adaptivemobai/` to safe location before updates.
 
 ---
 
-### 8. Debug Commands Not Working
+### 8. Admin Commands Not Working
 
-**Symptom**: `/mcaai` command not recognized.
+**Symptom**: `/amai` command not recognized.
 
 **Causes**:
 - Insufficient permissions
@@ -278,11 +268,17 @@ Search for "MCA AI Enhanced" or "gancity" in list.
 logs/latest.log
 ```
 Search for:
-```
-[MCA AI Enhanced] Commands registered
-```
+`RegisterCommandsEvent`, `Command registration hook failed`, or `MCA AI Enhanced`
 
-If missing, report bug with full log.
+**Supported commands today**:
+```
+/amai info
+/amai stats
+/amai status
+/amai compat
+/amai test dialogue <type>
+/amai loadout ...
+```
 
 ---
 
@@ -353,7 +349,7 @@ Report issues on GitHub if:
 **Include in bug report**:
 - Minecraft version
 - Forge version
-- Mod version (`/mcaai info`)
+- Mod version (`/amai info`)
 - Full crash report or latest.log
 - List of other mods installed
 - Steps to reproduce

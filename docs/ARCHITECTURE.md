@@ -253,7 +253,7 @@ src/main/java/com/minecraft/gancity/
 │   └── MCAIntegration.java         ← Optional MCA Reborn link
 │
 ├── command/
-│   └── MCAICommand.java            ← /mcaai commands
+│   └── GANCityCommand.java         ← /amai commands
 │
 └── GANCityMod.java                 ← Main mod class
 ```
@@ -348,8 +348,8 @@ src/main/java/com/minecraft/gancity/
 
 ```
 ┌────────────────────────────────────────────────────┐
-│  mca-ai-enhanced-common.toml                       │
-│  (config/mca-ai-enhanced-common.toml)              │
+│  adaptivemobai-common.toml                       │
+│  (config/adaptivemobai-common.toml)              │
 └────────────────┬───────────────────────────────────┘
                  │
                  │ Read at mod init

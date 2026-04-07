@@ -63,7 +63,7 @@ The server-only version includes extensive optimizations:
 
 ## Configuration
 
-### Server-Side Config (`config/mca-ai-enhanced-common.toml`)
+### Server-Side Config (`config/adaptivemobai-common.toml`)
 
 ```toml
 [ai]
@@ -149,19 +149,19 @@ Tested on dedicated server (8 cores, 16GB RAM, NVMe SSD):
 
 ### In-Game Commands (OP level 2+)
 ```
-/mcaai stats       # View AI performance stats
-/mcaai cache       # View cache hit rates
-/mcaai memory      # View memory usage
-/mcaai compat      # View mod compatibility
+/amai info        # Confirm the mod loaded and see active systems
+/amai stats       # View learning and runtime statistics
+/amai status      # View Cloudflare federation status
+/amai compat      # View mod compatibility
 ```
 
 ### Server Logs
 ```
 [INFO] MCA AI Enhanced - Initializing AI systems (SERVER-ONLY)...
-[INFO] Visual Perception cache hit rate: 87.3%
-[INFO] Curios cache hit rate: 94.1%
-[INFO] FTB Teams cache hit rate: 98.6%
-[INFO] DoubleDQN training batch: 32 experiences, loss: 0.0342
+[INFO] Mobs AI initialized successfully
+[INFO] Federated Learning enabled - API: https://mca-ai-tactics-api.mc-ai-datcol.workers.dev
+[INFO] Successfully submitted local tactics to global repository
+[WARN] Cloudflare API unavailable, continuing with local-only learning
 ```
 
 ## Compatibility
@@ -173,7 +173,7 @@ Tested on dedicated server (8 cores, 16GB RAM, NVMe SSD):
 
 ### Optional Enhancements
 - **MCA Reborn** (7.5.5+): Enhanced villager dialogue
-- **Curios API**: Trinket detection for AI
+- **Curios API**: Basic curio inventory signals for combat heuristics
 - **FTB Teams**: Multiplayer team coordination
 - **JEI**: Recipe integration (passive)
 - **Epic Fight**: Combat stance detection (future)

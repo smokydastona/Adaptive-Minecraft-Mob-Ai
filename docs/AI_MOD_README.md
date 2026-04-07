@@ -108,18 +108,18 @@ Villagers track their mood:
 
 ### Test Dialogue Generation
 ```
-/mcaai test dialogue <type>
+/amai test dialogue <type>
 ```
 Types: `greeting`, `small_talk`, `gift_positive`, `flirt`, `request_help`
 
 Example:
 ```
-/mcaai test dialogue greeting
+/amai test dialogue greeting
 ```
 
 ### View Mod Information
 ```
-/mcaai info
+/amai info
 ```
 Shows:
 - Mob AI status
@@ -129,7 +129,7 @@ Shows:
 
 ### View Statistics
 ```
-/mcaai stats
+/amai stats
 ```
 Displays:
 - Active mob behaviors
@@ -141,7 +141,7 @@ Displays:
 
 ## ⚙️ Configuration
 
-Edit `config/mca-ai-enhanced-common.toml`:
+Edit `config/adaptivemobai-common.toml`:
 
 ```toml
 [general]
@@ -242,8 +242,8 @@ Find the JAR in `build/libs/`
 
 ### Villagers not talking differently
 - Make sure MCA Reborn is installed
-- Check `/mcaai info` for MCA status
-- Try `/mcaai test dialogue greeting`
+- Check `/amai info` for MCA status
+- Try `/amai test dialogue greeting`
 
 ### Performance issues
 - Increase `aiUpdateInterval` (try 40)
@@ -278,7 +278,7 @@ Find the JAR in `build/libs/`
 ### For Server Owners
 1. Adjust `aiDifficulty` based on player skill
 2. Enable `debugAI` to monitor performance
-3. Use `/mcaai stats` to track AI activity
+3. Use `/amai stats` to track AI activity
 4. Disable specific features if needed
 
 ---

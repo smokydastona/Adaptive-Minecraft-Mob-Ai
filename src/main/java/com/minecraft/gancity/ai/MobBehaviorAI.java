@@ -723,7 +723,7 @@ public class MobBehaviorAI {
     }
     
     /**
-     * Enable federated learning with Git repository or cloud API
+     * Enable federated learning through the configured Cloudflare API endpoint.
      */
     public void enableFederatedLearning(String repoUrl, String cloudApiEndpoint, String cloudApiKey) {
         // Privacy/architecture: mod is Cloudflare-only. Git repo usage is deprecated and ignored.
@@ -2341,6 +2341,28 @@ public class MobBehaviorAI {
         }
         // Models are saved automatically during training
         LOGGER.info("ML systems persisted");
+    }
+
+    /**
+     * Persist local state and shut down background services.
+     */
+    public void shutdown() {
+        saveModel();
+
+        if (federatedLearning != null) {
+            try {
+                federatedLearning.shutdown();
+            } catch (Exception e) {
+                LOGGER.warn("Federated learning shutdown failed: {}", e.getMessage());
+            }
+            federatedLearning = null;
+        }
+
+        if (tacticKnowledgeBase != null) {
+            tacticKnowledgeBase.setFederatedLearning(null);
+        }
+        MLClassLoader.setFederatedLearning(null);
+        LOGGER.info("AI systems shut down");
     }
     
     /**

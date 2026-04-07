@@ -201,66 +201,20 @@ private float calculateRewardVariance(List<Experience> buffer, int sampleSize) {
 
 ---
 
-## 🔍 Debug Commands (Implemented)
+## 🔍 Operational Commands
 
-### 1. Q-Value Visualization
-```
-/mcaai debug qvalues <mob_uuid>
-```
-**Output**:
-```
-=== Q-Values for Zombie #12345 ===
-State: Health=15.0, EnemyDist=4.5, BiomeTemp=0.8
+The current in-game command surface is intentionally small:
 
-Actions:
-  circle_strafe:     Q=12.5  [████████░░] 83%
-  aggressive_rush:   Q=8.3   [█████░░░░░] 55%
-  tactical_retreat:  Q=3.1   [██░░░░░░░░] 21%
-  block_and_strike:  Q=1.8   [█░░░░░░░░░] 12%
-  
-Selected: circle_strafe (ε=0.15, exploring=false)
+```
+/amai info
+/amai stats
+/amai status
+/amai compat
+/amai test dialogue <type>
+/amai loadout ...
 ```
 
-### 2. Training Progress
-```
-/mcaai debug training <mob_type>
-```
-**Output**:
-```
-=== Training Stats: Zombie ===
-Experiences: 547 / 1000
-Epsilon: 0.45 (decaying)
-Loss: 0.082 (improving)
-Avg Reward (100 eps): +8.3
-
-Top Tactics:
-  1. circle_strafe (82% success, +12.5 reward)
-  2. aggressive_rush (71% success, +8.3 reward)
-  3. tactical_retreat (45% success, +3.1 reward)
-
-Last update: 2.3 seconds ago
-```
-
-### 3. Federation Status
-```
-/mcaai federation status
-```
-**Output**:
-```
-=== Federated Learning Status ===
-API Endpoint: https://mca-ai-tactics-api.mc-ai-datcol.workers.dev
-Connection: ✅ Healthy (last sync: 4m ago)
-
-Contributions:
-  Uploaded: 1,247 tactics
-  Downloaded: 3,892 tactics
-  
-Global Pool:
-  Total tactics: 45,321
-  Your server rank: #127 / 2,043 active servers
-  
-Next sync: 1m 23s
-```
+Use `/amai stats` for AI runtime information and `/amai status` for federation connectivity.
 
 ---
 
@@ -316,10 +270,9 @@ No performance penalty if ML disabled or model fails to load.
 - ✅ Ice and Fire: Dragons (soft dependency, detection via ModList)
 - ✅ MCA Reborn (soft dependency, reflection-based)
 - ✅ PMMO (compatibility layer, stat modifier reduction)
-- ✅ Curios API (equipment detection)
+- ✅ Curios API (basic curio inventory heuristics)
 
 ### Planned Additions
-- 🔜 **Fabric Loader** (v1.3.0) - requires porting to FabricMC
 - 🔜 **Minecraft 1.20.4** (v1.2.5) - update Forge mappings
 - 🔜 **Minecraft 1.21+** (TBD) - wait for stable Forge release
 

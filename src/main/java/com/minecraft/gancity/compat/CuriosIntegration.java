@@ -18,8 +18,10 @@ public class CuriosIntegration {
     
     private static boolean initialized = false;
     private static Class<?> curiosApiClass = null;
-    private static Method getCuriosHelperMethod = null;
+    private static Method getCuriosInventoryMethod = null;
     private static Method getEquippedCuriosMethod = null;
+    private static Method itemHandlerGetSlotsMethod = null;
+    private static Method itemHandlerGetStackInSlotMethod = null;
     
     // Cache for frequently called methods
     private static final Map<UUID, CachedCurioData> curioCache = new HashMap<>();
@@ -37,7 +39,14 @@ public class CuriosIntegration {
         try {
             // Load Curios API classes via reflection
             curiosApiClass = Class.forName("top.theillusivec4.curios.api.CuriosApi");
-            getCuriosHelperMethod = curiosApiClass.getMethod("getCuriosHelper");
+            Class<?> livingEntityClass = Class.forName("net.minecraft.world.entity.LivingEntity");
+            Class<?> curiosHandlerClass = Class.forName("top.theillusivec4.curios.api.type.capability.ICuriosItemHandler");
+            Class<?> itemHandlerClass = Class.forName("net.minecraftforge.items.IItemHandlerModifiable");
+
+            getCuriosInventoryMethod = curiosApiClass.getMethod("getCuriosInventory", livingEntityClass);
+            getEquippedCuriosMethod = curiosHandlerClass.getMethod("getEquippedCurios");
+            itemHandlerGetSlotsMethod = itemHandlerClass.getMethod("getSlots");
+            itemHandlerGetStackInSlotMethod = itemHandlerClass.getMethod("getStackInSlot", int.class);
             
             initialized = true;
             LOGGER.info("Curios API integration initialized successfully");
@@ -51,138 +60,154 @@ public class CuriosIntegration {
      * Get all equipped Curio items from player
      */
     public static List<ItemStack> getEquippedCurios(Player player) {
-        List<ItemStack> curios = new ArrayList<>();
-        
-        if (!initialized) {
-            init(); // Lazy init on first use to avoid classloading deadlock
-            if (!initialized) {
-                return curios;
-            }
-        }
-        
-        try {
-            // Use reflection to get equipped curios
-            // Would be: CuriosApi.getCuriosHelper().getEquippedCurios(player).resolve()
-            
-            // For now, return empty list - full implementation would require Curios as dependency
-            // This is a placeholder for when Curios is added to build.gradle
-            LOGGER.debug("Checking Curios for player {}", player.getName().getString());
-            
-        } catch (Exception e) {
-            LOGGER.debug("Error getting Curios items: {}", e.getMessage());
-        }
-        
-        return curios;
+        return new ArrayList<>(getCurioData(player).equippedCurios);
     }
     
     /**
      * Check if player has specific curio type equipped
      */
     public static boolean hasCurioType(Player player, String curioType) {
-        if (!initialized) {
+        if (curioType == null || curioType.isBlank()) {
             return false;
         }
-        
-        try {
-            // Check for specific curio types (ring, necklace, charm, etc.)
-            List<ItemStack> curios = getEquippedCurios(player);
-            
-            // Would implement curio type checking here
-            return false;
-            
-        } catch (Exception e) {
-            LOGGER.debug("Error checking Curio type: {}", e.getMessage());
-            return false;
+
+        String normalizedType = curioType.toLowerCase(Locale.ROOT);
+        for (ItemStack curio : getCurioData(player).equippedCurios) {
+            String itemName = curio.getDescriptionId().toLowerCase(Locale.ROOT);
+            if (itemName.contains(normalizedType)) {
+                return true;
+            }
         }
+
+        return false;
     }
     
     /**
      * Get total armor/protection value including curios
      */
     public static float getTotalProtectionWithCurios(Player player) {
-        float baseProtection = player.getArmorValue();
-        
-        if (!initialized) {
-            return baseProtection;
-        }
-        
-        try {
-            List<ItemStack> curios = getEquippedCurios(player);
-            
-            // Add protection from curio items
-            for (ItemStack curio : curios) {
-                // Would calculate protection bonus from curios
-                // baseProtection += getCurioProtection(curio);
-            }
-            
-        } catch (Exception e) {
-            LOGGER.debug("Error calculating Curio protection: {}", e.getMessage());
-        }
-        
-        return baseProtection;
+        CachedCurioData curioData = getCurioData(player);
+        return player.getArmorValue() + curioData.protectionBonus;
     }
     
     /**
      * Check if player has magical trinkets (affects AI tactics)
      */
     public static boolean hasMagicalTrinkets(Player player) {
-        if (!initialized) {
-            return false;
-        }
-        
-        try {
-            List<ItemStack> curios = getEquippedCurios(player);
-            
-            // Check for magical curios that would affect combat
-            // Ring of Resistance, Charm of Protection, etc.
-            for (ItemStack curio : curios) {
-                String itemName = curio.getDescriptionId().toLowerCase();
-                if (itemName.contains("ring") || itemName.contains("charm") || 
-                    itemName.contains("amulet") || itemName.contains("talisman")) {
-                    return true;
-                }
-            }
-            
-        } catch (Exception e) {
-            LOGGER.debug("Error checking magical trinkets: {}", e.getMessage());
-        }
-        
-        return false;
+        return getCurioData(player).hasMagicalTrinkets;
     }
     
     /**
      * Get Curio enhancement factor (1.0 = no curios, >1.0 = enhanced player)
      */
     public static float getCurioEnhancementFactor(Player player) {
+        return getCurioData(player).enhancement;
+    }
+
+    private static CachedCurioData getCurioData(Player player) {
         if (!initialized) {
+            init();
+            if (!initialized) {
+                return CachedCurioData.empty();
+            }
+        }
+
+        UUID playerId = player.getUUID();
+        CachedCurioData cached = curioCache.get(playerId);
+        long now = System.currentTimeMillis();
+        if (cached != null && (now - cached.timestamp) <= CACHE_DURATION_MS) {
+            return cached;
+        }
+
+        CachedCurioData refreshed = loadCurioData(player, now);
+        updateCache(playerId, refreshed);
+        return refreshed;
+    }
+
+    private static CachedCurioData loadCurioData(Player player, long now) {
+        List<ItemStack> curios = new ArrayList<>();
+
+        try {
+            Object optionalInventory = getCuriosInventoryMethod.invoke(null, player);
+            if (!(optionalInventory instanceof Optional<?> inventoryOptional) || inventoryOptional.isEmpty()) {
+                return CachedCurioData.empty(now);
+            }
+
+            Object handler = inventoryOptional.get();
+            Object itemHandler = getEquippedCuriosMethod.invoke(handler);
+            if (itemHandler == null) {
+                return CachedCurioData.empty(now);
+            }
+
+            int slots = ((Number) itemHandlerGetSlotsMethod.invoke(itemHandler)).intValue();
+            for (int index = 0; index < slots; index++) {
+                Object stackObject = itemHandlerGetStackInSlotMethod.invoke(itemHandler, index);
+                if (stackObject instanceof ItemStack stack && !stack.isEmpty()) {
+                    curios.add(stack.copy());
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Error getting Curios items: {}", e.getMessage());
+            return CachedCurioData.empty(now);
+        }
+
+        return new CachedCurioData(
+            Collections.unmodifiableList(curios),
+            hasMagicalCurio(curios),
+            getEnhancementForCount(curios.size()),
+            estimateProtectionBonus(curios),
+            now
+        );
+    }
+
+    private static boolean hasMagicalCurio(List<ItemStack> curios) {
+        for (ItemStack curio : curios) {
+            String itemName = curio.getDescriptionId().toLowerCase(Locale.ROOT);
+            if (itemName.contains("ring") || itemName.contains("charm") ||
+                itemName.contains("amulet") || itemName.contains("talisman") ||
+                itemName.contains("relic") || itemName.contains("bauble")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static float getEnhancementForCount(int curioCount) {
+        if (curioCount <= 0) {
             return 1.0f;
         }
-        
-        try {
-            List<ItemStack> curios = getEquippedCurios(player);
-            
-            // More curios = tougher player = mobs should be more careful
-            if (curios.isEmpty()) {
-                return 1.0f;
-            } else if (curios.size() <= 2) {
-                return 1.1f;
-            } else if (curios.size() <= 4) {
-                return 1.2f;
-            } else {
-                return 1.3f;  // Heavily equipped player
-            }
-            
-        } catch (Exception e) {
-            LOGGER.debug("Error calculating Curio enhancement: {}", e.getMessage());
+        if (curioCount <= 2) {
+            return 1.1f;
         }
-        
-        return 1.0f;
+        if (curioCount <= 4) {
+            return 1.2f;
+        }
+        return 1.3f;
+    }
+
+    private static float estimateProtectionBonus(List<ItemStack> curios) {
+        float protectionBonus = 0.0f;
+
+        for (ItemStack curio : curios) {
+            String itemName = curio.getDescriptionId().toLowerCase(Locale.ROOT);
+            if (itemName.contains("protection") || itemName.contains("defense") ||
+                itemName.contains("shield") || itemName.contains("ward") ||
+                itemName.contains("guard") || itemName.contains("armor") ||
+                itemName.contains("armour") || itemName.contains("resist")) {
+                protectionBonus += 1.0f;
+            } else if (itemName.contains("ring") || itemName.contains("amulet") ||
+                itemName.contains("charm") || itemName.contains("talisman")) {
+                protectionBonus += 0.25f;
+            }
+        }
+
+        return protectionBonus;
     }
     
     /**
      * Update cache with curio data
      */
-    private static void updateCache(UUID playerId, boolean hasTrinkets, float enhancement) {
+    private static void updateCache(UUID playerId, CachedCurioData curioData) {
         // Evict old entries if cache too large
         if (curioCache.size() > MAX_CACHE_SIZE) {
             long now = System.currentTimeMillis();
@@ -191,18 +216,30 @@ public class CuriosIntegration {
             );
         }
         
-        curioCache.put(playerId, new CachedCurioData(hasTrinkets, enhancement, System.currentTimeMillis()));
+        curioCache.put(playerId, curioData);
     }
     
     private static class CachedCurioData {
+        final List<ItemStack> equippedCurios;
         final boolean hasMagicalTrinkets;
         final float enhancement;
+        final float protectionBonus;
         final long timestamp;
         
-        CachedCurioData(boolean hasTrinkets, float enhancement, long timestamp) {
+        CachedCurioData(List<ItemStack> equippedCurios, boolean hasTrinkets, float enhancement, float protectionBonus, long timestamp) {
+            this.equippedCurios = equippedCurios;
             this.hasMagicalTrinkets = hasTrinkets;
             this.enhancement = enhancement;
+            this.protectionBonus = protectionBonus;
             this.timestamp = timestamp;
+        }
+
+        static CachedCurioData empty() {
+            return empty(System.currentTimeMillis());
+        }
+
+        static CachedCurioData empty(long timestamp) {
+            return new CachedCurioData(Collections.emptyList(), false, 1.0f, 0.0f, timestamp);
         }
     }
 }

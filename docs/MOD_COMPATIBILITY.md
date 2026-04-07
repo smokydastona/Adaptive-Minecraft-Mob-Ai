@@ -12,18 +12,17 @@ MCA AI Enhanced is designed to work standalone, but integrates with popular Forg
 **Download**: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/curios) | [Modrinth](https://modrinth.com/mod/curios)
 
 **Features Unlocked**:
-- Enhanced equipment detection for mob AI
-- Recognizes trinkets, baubles, and accessories
-- Mobs adapt tactics based on magical items (rings, amulets, charms)
-- Protection calculation includes curio bonuses
-- Difficulty scaling based on curio count
+- Reads equipped curio items through reflection when Curios is present
+- Recognizes trinkets, baubles, and accessories by equipped item identifiers
+- Applies basic magical-trinket and protection heuristics to combat decisions
+- Scales caution based on how many curios a player has equipped
 
 **AI Impact**:
 ```
 Player with Rings of Protection + Strength Charm:
-→ Mob AI detects 1.3x enhancement factor
-→ Recommends group_rush and tactical retreat
-→ Visual perception includes magical trinket awareness
+→ Mob AI detects additional equipped curios
+→ Visual perception raises player threat slightly
+→ Tactics can favor safer spacing or extra pressure
 ```
 
 ---
